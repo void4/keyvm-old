@@ -8,12 +8,13 @@ H_REC, H_GAS, H_MEM, H_IP = range(HEADERLEN)
 
 CAPW, CAPR, CAPC = range(3)
 
-I_CREATE, I_ALLOC, I_RECURSE, I_MEMSIZE, I_NANDI, I_NAND = range(6)
+I_CREATE, I_ALLOC, I_TRANSFERCAP, I_RECURSE, I_MEMSIZE, I_NANDI, I_NAND = range(7)
 
 IGASCOSTS = {
 	I_CREATE: HEADERLEN,
 	I_ALLOC: None,
-	I_RECURSE: 4,
+	I_TRANSFERCAP: 6,
+	I_RECURSE: 20,
 	I_MEMSIZE: 1,
 	I_NANDI: 2,
 	I_NAND: 3
@@ -22,6 +23,7 @@ IGASCOSTS = {
 IMEMCOSTS = {
 	I_CREATE : HEADERLEN,#plus some constant overhead for lists?
 	I_ALLOC: None,
+	I_TRANSFERCAP: None,
 	I_RECURSE: 0,
 	I_MEMSIZE: 0,
 	I_NANDI: 0,
@@ -38,7 +40,8 @@ IMEMCOSTS = {
 code = [
 [I_CREATE],
 [I_ALLOC, 1, 4],
-[I_RECURSE, 1, 100, 100, 0, 0, 1]
+[I_TRANSFERCAP, 1, None, None, 0],
+[I_RECURSE, 1, 100, 100],
 ]
 
 def pretty(p):
@@ -60,6 +63,11 @@ active = 0
 
 STEP = 0
 
+def debug():
+	print("\nSTEP#"	 + str(STEP), I)
+	for proc in world:
+		print(pretty(proc))
+
 while True:
 	STEP += 1
 
@@ -76,6 +84,11 @@ while True:
 
 	def has_cap(type, target):
 		return target in caps[type]
+
+	def transfer_cap(type, index, table):
+		#print("TRANSFER", type, index, caps[type])
+		if index in caps[type]:
+			table[type].add(index)
 
 	def can_call(target):
 		return has_cap(CAPC, target)
@@ -108,7 +121,10 @@ while True:
 
 	memcost = IMEMCOSTS[I]
 	if memcost is None:
-		memcost = args[1]#size arg for ALLOC
+		if I == I_ALLOC:
+			memcost = args[1]#size arg for ALLOC
+		elif I == I_TRANSFERCAP:
+			memcost = sum([1 for c in args[1:] if c is not None])
 
 	if header[H_MEM] < memcost:
 		print("OOM JUMP")
@@ -116,15 +132,9 @@ while True:
 
 	header[H_MEM] -= memcost
 
-	print("\nSTEP#"	 + str(STEP), I)
-	for proc in world:
-		print(pretty(proc))
+	debug()
 
 	header[H_IP] += 1
-
-	def transfer_cap(type, index, table):
-		if index in caps[type]:
-			table[type].add(index)
 
 	if I == I_CREATE:
 		index = len(world)
@@ -144,8 +154,8 @@ while True:
 		if can_write(target):
 			world[target][DATA] += [0 for i in range(size)]
 
-	elif I == I_RECURSE:
-		target, gas, mem, wcap, rcap, ccap = args
+	elif I == I_TRANSFERCAP:
+		target, wcap, rcap, ccap = args
 
 		if can_call(target):
 			target_caps = world[target][CAPS]
@@ -154,6 +164,11 @@ while True:
 			transfer_cap(CAPW, wcap, target_caps)
 			transfer_cap(CAPR, rcap, target_caps)
 			transfer_cap(CAPC, ccap, target_caps)
+
+	elif I == I_RECURSE:
+		target, gas, mem = args
+
+		if can_call(target):
 
 			target_header = world[target][HEADER]
 			target_header[H_GAS] = min(header[H_GAS], gas)
@@ -179,20 +194,24 @@ while True:
 		if can_write(target) and can_read(source):
 			world[target][DATA][target_index] = ~(data & world[source][DATA][source_index])
 
+debug()
+
 from graphviz import Digraph
-
-
 
 def visualize():
 
 	dot = Digraph()
 	dot.format = "svg"
 
+	def name(index):
+		return "%i [%i|%i]" % (index, world[index][HEADER][H_GAS], world[index][HEADER][H_MEM])
+
+	#TODO highlight active
+
 	for pi, proc in enumerate(world):
 		for type in [CAPW, CAPR, CAPC]:
 			for cap in proc[CAPS][type]:
-				print(pi, cap)
-				dot.edge(str(pi), str(cap), color=["red", "green", "blue"][type])
+				dot.edge(name(pi), name(cap), color=["red", "green", "blue"][type])
 
 	dot.render("graph", view=True)
 
