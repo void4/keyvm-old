@@ -8,9 +8,9 @@ H_REC, H_GAS, H_MEM, H_IP = range(HEADERLEN)
 
 CAPW, CAPR, CAPC = range(3)
 
-I_CREATE, I_ALLOC, I_TRANSFERCAP, I_RECURSE, I_MEMSIZE, I_NANDI, I_NAND = range(7)
+I_CREATE, I_ALLOC, I_TRANSFERCAP, I_RECURSE, I_MEMSIZE, I_WRITESUB, I_NANDI, I_NAND = range(8)
 
-INAMES = "I_CREATE, I_ALLOC, I_TRANSFERCAP, I_RECURSE, I_MEMSIZE, I_NANDI, I_NAND".split(", ")
+INAMES = "I_CREATE, I_ALLOC, I_TRANSFERCAP, I_RECURSE, I_MEMSIZE, I_WRITESUB, I_NANDI, I_NAND".split(", ")
 
 IGASCOSTS = {
 	I_CREATE: HEADERLEN,
@@ -18,6 +18,7 @@ IGASCOSTS = {
 	I_TRANSFERCAP: 6,
 	I_RECURSE: 20,
 	I_MEMSIZE: 1,
+	I_WRITESUB: 2,
 	I_NANDI: 2,
 	I_NAND: 3
 }
@@ -28,6 +29,7 @@ IMEMCOSTS = {
 	I_TRANSFERCAP: None,
 	I_RECURSE: 0,
 	I_MEMSIZE: 0,
+	I_WRITESUB: 0,
 	I_NANDI: 0,
 	I_NAND: 0
 }
@@ -41,12 +43,17 @@ IMEMCOSTS = {
 
 code = [
 [I_CREATE],
-[I_ALLOC, 1, 4],
 [I_TRANSFERCAP, 1, None, None, 0],
+[I_ALLOC, 1, 1],
+[I_WRITESUB, 1, 14, 42],
 [I_RECURSE, 1, 100, 100],
 ]
 
 def pretty(p):
+	#print(p)
+	if isinstance(p[0], list):
+		p = flat(p)
+	print(p)
 	if not isinstance(p[0], list):
 		p = sharp(p)
 	h = p[HEADER]
@@ -79,7 +86,7 @@ def flat(s):
 
 	code = []
 	for instruction in s[CODE]:
-		code += len(instruction)
+		code += [len(instruction)]
 		code += instruction
 
 	return [len(s[HEADER])] + s[HEADER] + caps + [len(s[CODE])] + code + [len(s[DATA])] + s[DATA]
@@ -121,6 +128,27 @@ while True:
 	header = this[HEADER]
 	caps = this[CAPS]
 	code = this[CODE]
+
+	def ensure_sharp(target):
+		if not isinstance(world[target][0], list):
+			world[target] = sharp(world[target])
+
+	def ensure_flat(target):
+		if isinstance(world[target][0], list):
+			world[target] = flat(world[target])
+
+	def ensure_mutable(target, target_index):
+		ensure_flat(target)
+		# TODO: in this unoptimized serialization format, 4 reads required!
+		t = world[target]
+		headerlen = t[0]
+		wcaplen = t[1+headerlen]
+		rcaplen = t[1+headerlen+1+wcaplen]
+		ccaplen = t[1+headerlen+1+wcaplen+1+rcaplen]
+		#print("TARGET", target_index, headerlen, wcaplen, rcaplen, ccaplen)
+		endofcaps = 1+headerlen+1+wcaplen+1+rcaplen+1+ccaplen
+		if target_index < endofcaps:
+			raise Exception("IMMUTABLE")
 
 	def set_cap(type, target):
 		caps[type].add(target)
@@ -190,11 +218,10 @@ while True:
 		set_cap(CAPR, index)
 		set_cap(CAPC, index)
 
-		# created cap can't read or write to self yet! should this really depend on index? always allow self-access? for now, yes
-
 	elif I == I_ALLOC:
 		target, size = args
 		if can_write(target):
+			# TODO this is weird
 			world[target] = sharp(world[target])
 			world[target][DATA] += [0 for i in range(size)]
 			world[target] = flat(world[target])
@@ -231,11 +258,19 @@ while True:
 		if can_write(target) and can_read(source):
 			world[target][DATA][target_index] = len(world[source])#must be serialized!
 
+	elif I == I_WRITESUB:
+		target, target_index, data = args
+		if can_write(target):
+			ensure_mutable(target, target_index)
+			world[target][target_index] = data
+			print("WRITING")
+
 	elif I == I_NANDI:
 		#communicate over third domain?
 		target, target_index, data = args
 		if can_write(target) and can_read(target):
-			# if target isn't flat, can't write code
+			ensure_sharp(target)
+			ensure_sharp(source)
 			world[target][DATA][target_index] = ~(data & world[target][DATA][target_index])
 
 	elif I == I_NAND:
@@ -264,4 +299,4 @@ def visualize():
 
 	dot.render("graph", view=True)
 
-visualize()
+#visualize()

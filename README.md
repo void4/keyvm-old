@@ -27,3 +27,18 @@ problem: cap destroy: not fixed size operation, have to go through all processes
 what if instead of destination map, there was a source map, one for each domain? yeah, seems to make sense, though not 100% sure
 what implications does this have for limits? can only be referred to by 64, but same is true otherwise
 currently, bitmap limits NUMBER OF DOMAINS in system!
+
+New problem: if it isn't completely flat, can't write code
+create code from own memory, then unchangeable?
+have to clarify alloc semantics
+should/can VM operate only on sharp representation?
+
+have to ensure that header/caps aren't overwritten
+if target isn't flat, can't write code
+unify code and data again?
+TODO man, this is weird semantics
+
+btw, NAND makes copying values have 2x overhead if memory not initialized with -1
+
+cap semantics on creation
+should it be able to read/write/call itself immediately?
