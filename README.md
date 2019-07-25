@@ -22,3 +22,8 @@ flat vs hierarchy
 not sure what advantages of hierarchy are
 
 TODO research dynamic instruction format optimization, e.g. omit caps
+
+problem: cap destroy: not fixed size operation, have to go through all processes and purge bit
+what if instead of destination map, there was a source map, one for each domain? yeah, seems to make sense, though not 100% sure
+what implications does this have for limits? can only be referred to by 64, but same is true otherwise
+currently, bitmap limits NUMBER OF DOMAINS in system!
