@@ -10,11 +10,9 @@ H_STATUS, H_REC, H_GAS, H_MEM, H_IP = range(HEADERLEN)
 STATUSLEN = 4
 S_NORMAL, S_OOC, S_OOG, S_OOM = range(STATUSLEN)
 
-CAPW, CAPR, CAPC = range(3)
+I_CREATE, I_ALLOC, I_TRANSFERCAP, I_RECURSE, I_MEMSIZE, I_MEMWRITE, I_MEMCREATE = range(7)
 
-I_CREATE, I_ALLOC, I_TRANSFERCAP, I_RECURSE, I_MEMSIZE, I_WRITESUB, I_NANDI, I_NAND = range(8)
-
-INAMES = "I_CREATE, I_ALLOC, I_TRANSFERCAP, I_RECURSE, I_MEMSIZE, I_WRITESUB, I_NANDI, I_NAND".split(", ")
+INAMES = "I_CREATE, I_ALLOC, I_TRANSFERCAP, I_RECURSE, I_MEMSIZE, I_MEMWRITE, I_MEMCREATE".split(", ")
 
 IGASCOSTS = {
 	I_CREATE: HEADERLEN,
@@ -22,9 +20,8 @@ IGASCOSTS = {
 	I_TRANSFERCAP: 6,
 	I_RECURSE: 20,
 	I_MEMSIZE: 1,
-	I_WRITESUB: 2,
-	I_NANDI: 2,
-	I_NAND: 3
+	I_MEMWRITE: 2,
+	I_MEMCREATE: 4,
 }
 
 IMEMCOSTS = {
@@ -33,25 +30,29 @@ IMEMCOSTS = {
 	I_TRANSFERCAP: None,
 	I_RECURSE: 0,
 	I_MEMSIZE: 0,
-	I_WRITESUB: 0,
-	I_NANDI: 0,
-	I_NAND: 0
+	I_MEMWRITE: 0,
+	I_MEMCREATE: 2,
 }
 
 def flat(s):
-	caps = []
-	for i in range(len(s[CAPS])):
-		caps += [len(s[CAPS][i])] + list(s[CAPS][i])
+	# TODO refactor this to have all the length in the front, like in ye olden times
+	# This makes checking for mutability easier
+	caps = [len(s[CAPS])] + list(s[CAPS])
 
 	code = []
 	for instruction in s[CODE]:
 		code += [len(instruction)]
 		code += instruction
 
-	return [len(s[HEADER])] + s[HEADER] + caps + [len(s[CODE])] + code + [len(s[DATA])] + s[DATA]
+	data = []
+	for d in s[DATA]:
+		data += [len(d)]
+		data += d
+
+	return [len(s[HEADER])] + s[HEADER] + caps + [len(s[CODE])] + code + [len(s[DATA])] + data
 
 def sharp(f):
-
+	print(f)
 	index = 0
 	def read():
 		nonlocal index
@@ -62,16 +63,17 @@ def sharp(f):
 	l = read()
 	header = [read() for i in range(l)]
 
-	caps = []
-	for i in range(3):
-		l = read()
-		caps.append({read() for j in range(l)})
+	l = read()
+	caps = set([read() for u in range(l)])
 
 	l = read()
 	code = [[read() for j in range(read())] for i in range(l)]
 
+	data = []
 	l = read()
-	data = [read() for i in range(l)]
+	for i in range(l):
+		dl = read()
+		data += [read() for j in range(dl)]
 
 	s = [header, caps, code, data]
 	#print("RET", s)
@@ -86,7 +88,7 @@ def pretty(p):
 	h = p[HEADER]
 	c = p[CAPS]
 	numbers = [str(h[i]) for i in [H_REC, H_GAS, H_MEM, H_IP]]
-	caps = [str(c[i]) for i in [CAPW, CAPR, CAPC]]
+	caps = [str(c)]
 	head = "\t".join(numbers+caps)
 
 	body = str(p[DATA])# str(p[CODE]) +
@@ -100,36 +102,23 @@ def pretty(p):
 #def start()
 
 code = [
-[I_CREATE],
-[I_TRANSFERCAP, 1, None, None, 0],
-[I_ALLOC, 1, 1],
-[I_WRITESUB, 1, 15, 42],
+[I_MEMCREATE],
+[I_ALLOC, 0, 10],
+[I_MEMWRITE, 0, 0, HEADERLEN],
+[I_MEMWRITE, 0, 1, 0],
+[I_MEMWRITE, 0, 2, 0],
+[I_MEMWRITE, 0, 3, 100],
+[I_MEMWRITE, 0, 4, 100],
+[I_MEMWRITE, 0, 5, 0],
+[I_MEMWRITE, 0, 6, 0],
+[I_MEMWRITE, 0, 7, 0],
+[I_CREATE, 0],
+[I_TRANSFERCAP, 1, 0],
 [I_RECURSE, 1, 100, 100],
 ]
 
-def ensure_sharp(target):
-	if not isinstance(world[target][0], list):
-		world[target] = sharp(world[target])
-
-def ensure_flat(target):
-	if isinstance(world[target][0], list):
-		world[target] = flat(world[target])
-
-def ensure_mutable(target, target_index):
-	ensure_flat(target)
-	# TODO: in this unoptimized serialization format, 4 reads required!
-	t = world[target]
-	headerlen = t[0]
-	wcaplen = t[1+headerlen]
-	rcaplen = t[1+headerlen+1+wcaplen]
-	ccaplen = t[1+headerlen+1+wcaplen+1+rcaplen]
-	#print("TARGET", target_index, headerlen, wcaplen, rcaplen, ccaplen)
-	endofcaps = 1+headerlen+1+wcaplen+1+rcaplen+1+ccaplen
-	if target_index < endofcaps:
-		raise Exception("IMMUTABLE")
-
 #TODO: make CAPS dict? other data structure?
-process = [[S_NORMAL,0,1000,1000,0], [{0},{0},{0}], code, []]
+process = [[S_NORMAL,0,1000,1000,0], {0}, code, []]
 world = [process]
 
 def debug():
@@ -142,7 +131,6 @@ chain = [start]
 
 while True:
 	current = chain[-1]
-	ensure_sharp(current)
 	rec = world[current][HEADER][H_REC]
 	if rec != current:
 		chain.append(rec)
@@ -177,32 +165,22 @@ while True:
 		header[H_STATUS] = condition
 		# TODO make this nicer
 		if to is None:
-			world[active] = flat(world[active])
+			#world[active] = flat(world[active])
 			chain = chain[:-1]
 		else:
 			for i in range(len(world)-1, to, -1):
 				world[i] = flat(world[i])
 				chain = chain[:-1]
 
-	def set_cap(type, target):
-		caps[type].add(target)
+	def set_cap(target):
+		caps.add(target)
 
-	def has_cap(type, target):
-		return target in caps[type]
+	def has_cap(target):
+		return target in caps
 
-	def transfer_cap(type, index, table):
-		#print("TRANSFER", type, index, caps[type])
-		if index in caps[type]:
-			table[type].add(index)
-
-	def can_call(target):
-		return has_cap(CAPC, target)
-
-	def can_write(target):
-		return has_cap(CAPW, target)
-
-	def can_read(source):
-		return has_cap(CAPR, target)
+	def transfer_cap(index, table):
+		if index in caps:
+			table.add(index)
 
 	ip = header[H_IP]
 	if ip >= len(code):#could also wrap around for shits and giggles
@@ -248,43 +226,31 @@ while True:
 	header[H_IP] += 1
 
 	if I == I_CREATE:
+		memory = args[0]
 		index = len(world)
 
-		newproc = flat([[0, 0, 0, 0, 0], [{index},{index},{index}], [], []])
+		newproc = sharp(this[DATA][memory])
 		#print("NEW", newproc)
 		world.append(newproc)
 
-		set_cap(CAPW, index)
-		set_cap(CAPR, index)
-		set_cap(CAPC, index)
+		set_cap(index)
 
 	elif I == I_ALLOC:
-		target, size = args
-		if can_write(target):
-			# TODO this is weird
-			world[target] = sharp(world[target])
-			world[target][DATA] += [0 for i in range(size)]
-			world[target] = flat(world[target])
+		memory, size = args
+		this[DATA][memory] += [0 for i in range(size)]
 
 	elif I == I_TRANSFERCAP:
-		target, wcap, rcap, ccap = args
+		# TODO can only transfer 1 cap per call
+		target, cap = args
 
-		if can_call(target):
-			world[target] = sharp(world[target])
-
+		if has_cap(target):
 			target_caps = world[target][CAPS]
-
-			# TODO can only transfer 1 cap per call
-			transfer_cap(CAPW, wcap, target_caps)
-			transfer_cap(CAPR, rcap, target_caps)
-			transfer_cap(CAPC, ccap, target_caps)
-			world[target] = flat(world[target])
+			transfer_cap(cap, target_caps)
 
 	elif I == I_RECURSE:
 		target, gas, mem = args
 
-		if can_call(target):
-			world[target] = sharp(world[target])
+		if has_cap(target):
 
 			target_header = world[target][HEADER]
 			target_header[H_GAS] = min(header[H_GAS], gas)
@@ -292,32 +258,18 @@ while True:
 
 			header[H_REC] = target
 			active = target
+			chain.append(target)
 
 	elif I == I_MEMSIZE:
-		target, target_index, source = args
-		if can_write(target) and can_read(source):
-			world[target][DATA][target_index] = len(world[source])#must be serialized!
+		target_index = args
+		this[DATA][target_index] = len(this[DATA])#must be serialized!
 
-	elif I == I_WRITESUB:
-		target, target_index, data = args
-		if can_write(target):
-			ensure_mutable(target, target_index)
-			#TODO ensure_flat, ensure not self
-			world[target][target_index] = data
-			print("WRITING")
+	elif I == I_MEMWRITE:
+		memory, address, data = args
+		this[DATA][memory][address] = data
 
-	elif I == I_NANDI:
-		#communicate over third domain?
-		target, target_index, data = args
-		if can_write(target) and can_read(target):
-			ensure_sharp(target)
-			ensure_sharp(source)
-			world[target][DATA][target_index] = ~(data & world[target][DATA][target_index])
-
-	elif I == I_NAND:
-		target, target_index, source, source_index = args
-		if can_write(target) and can_read(source):
-			world[target][DATA][target_index] = ~(data & world[source][DATA][source_index])
+	elif I == I_MEMCREATE:
+		this[DATA].append([])
 
 debug()
 
@@ -334,9 +286,8 @@ def visualize():
 	#TODO highlight active
 
 	for pi, proc in enumerate(world):
-		for type in [CAPW, CAPR, CAPC]:
-			for cap in proc[CAPS][type]:
-				dot.edge(name(pi), name(cap), color=["red", "green", "blue"][type])
+		for cap in proc[CAPS]:
+			dot.edge(name(pi), name(cap), color="black")
 
 	dot.render("graph", view=True)
 
