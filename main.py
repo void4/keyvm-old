@@ -7,12 +7,23 @@ HEADER, CAPS, CODE, DATA = range(4)
 HEADERLEN = 5
 H_STATUS, H_REC, H_GAS, H_MEM, H_IP = range(HEADERLEN)
 
-STATUSLEN = 4
-S_NORMAL, S_OOC, S_OOG, S_OOM = range(STATUSLEN)
+STATUSLEN = 6
+S_NORMAL, S_OOC, S_OOG, S_OOM, S_OOA, S_OOF = range(STATUSLEN)
 
-I_CREATE, I_ALLOC, I_TRANSFERCAP, I_RECURSE, I_MEMSIZE, I_MEMWRITE, I_MEMCREATE = range(7)
+NUMINSTR = 7
+I_CREATE, I_ALLOC, I_TRANSFERCAP, I_RECURSE, I_MEMSIZE, I_MEMWRITE, I_MEMCREATE = range(NUMINSTR)
 
 INAMES = "I_CREATE, I_ALLOC, I_TRANSFERCAP, I_RECURSE, I_MEMSIZE, I_MEMWRITE, I_MEMCREATE".split(", ")
+
+ARGLEN = {
+	I_CREATE: 1,
+	I_ALLOC: 2,
+	I_TRANSFERCAP: 2,
+	I_RECURSE: 3,
+	I_MEMSIZE: 1,
+	I_MEMWRITE: 3,
+	I_MEMCREATE: 0,
+}
 
 IGASCOSTS = {
 	I_CREATE: HEADERLEN,
@@ -98,6 +109,15 @@ def pretty(p):
 
 # does it always jump back to the minimum of all header resources?
 
+def validate(sharp):
+	firstlevel = isinstance(sharp, list) and isinstance(sharp[0], list) and isinstance(sharp[1], set) and isinstance(sharp[2], list)
+	if not firstlevel:
+		return False
+	secondlevel = all([isinstance(instr, list) and all([isinstance(i, int) for i in instr]) for instr in sharp[2]])
+	if not secondlevel:
+		return False
+	return True
+
 def run(code):
 	#TODO: make CAPS dict? other data structure?
 	process = [[S_NORMAL,0,1000,1000,0], {0}, code, []]
@@ -134,6 +154,11 @@ def run(code):
 			#break
 		this = world[chain[-1]]
 
+		if not validate(this):
+			#jump_back(S_OOF)
+			#continue
+			os._exit(1)
+
 		#TODO: only deserialize here, on demand
 
 		header = this[HEADER]
@@ -152,7 +177,7 @@ def run(code):
 				chain = chain[:-1]
 			else:
 				for i in range(len(world)-1, to, -1):
-					world[i] = flat(world[i])
+					#world[i] = flat(world[i])
 					chain = chain[:-1]
 
 		def set_cap(target):
@@ -171,10 +196,23 @@ def run(code):
 			continue
 
 		#print(ip, len(code))
-		C = code[ip]
-		I = C[0]
+		try:
+			C = code[ip]
+			I = C[0]
+		except IndexError:
+			jump_back(S_OOC)
+			continue
+
+		if I >= NUMINSTR:
+			jump_back(S_OOA)#TODO maybe other code here?
+			continue
+
 		#TODO check length
 		args = C[1:]
+
+		if len(args) != ARGLEN[I]:
+			jump_back(S_OOA, len(chain)-2)
+			continue
 
 		gascost = IGASCOSTS[I]
 		if gascost is None:
@@ -189,12 +227,17 @@ def run(code):
 
 		for node_index, node in enumerate(chain):
 			node_header = world[node][HEADER]
+			if not validate(node):
+				#TODO this is too heavy
+				jump_back(S_OOF, node_index-1)
+				break
 			if node_header[H_GAS] < gascost:
 				jump_back(S_OOG, node_index-1)
 				break
 			if node_header[H_MEM] < memcost:
 				jump_back(S_OOM, node_index-1)
 				break
+
 
 		if JB:
 			continue
@@ -212,7 +255,11 @@ def run(code):
 			memory = args[0]
 			index = len(world)
 
-			newproc = sharp(this[DATA][memory])
+			try:
+				newproc = sharp(this[DATA][memory])
+			except IndexError:
+				#TODO set STATUS
+				continue
 			newproc[HEADER] = [S_NORMAL, 0, 0, 0, 0]
 			newproc[CAPS] = set()
 			#print("NEW", newproc)
@@ -222,7 +269,12 @@ def run(code):
 
 		elif I == I_ALLOC:
 			memory, size = args
-			this[DATA][memory] += [0 for i in range(size)]
+			try:
+				this[DATA][memory] += [0 for i in range(size)]
+			except IndexError:
+				#TODO other code
+				jump_back(S_OOA, node_index-1)
+				continue
 
 		elif I == I_TRANSFERCAP:
 			# TODO can only transfer 1 cap per call
@@ -246,12 +298,18 @@ def run(code):
 				chain.append(target)
 
 		elif I == I_MEMSIZE:
-			target_index = args
-			this[DATA][target_index] = len(this[DATA])#must be serialized!
+			target_index = args[0]
+			try:
+				this[DATA][target_index] = len(this[DATA])#must be serialized!
+			except IndexError:
+				jump_back(S_OOA)
 
 		elif I == I_MEMWRITE:
 			memory, address, data = args
-			this[DATA][memory][address] = data
+			try:
+				this[DATA][memory][address] = data
+			except IndexError:
+				jump_back(S_OOA)
 
 		elif I == I_MEMCREATE:
 			this[DATA].append([])
@@ -285,7 +343,7 @@ from time import time
 
 from graphviz import Digraph
 
-def visualize(world):
+def visualize(world, startcode):
 
 	dot = Digraph()
 	dot.format = "svg"
@@ -294,6 +352,9 @@ def visualize(world):
 		return "%i [%i|%i]" % (index, world[index][HEADER][H_GAS], world[index][HEADER][H_MEM])
 
 	#TODO highlight active
+	if not isinstance(world[0][0], list):
+		print("VIZ NOT SHARP")
+		return
 
 	edges = 0
 	for pi, proc in enumerate(world):
@@ -301,20 +362,24 @@ def visualize(world):
 			edges += 1
 			dot.edge(name(pi), name(cap), color="black")
 
-	if edges > 10:
-		dot.render("graphs/"+str(int(time()*10000)))#, view=True)
+	if edges > 3:
+		fname = str(int(time()*10000))
+		with open("graphs/"+fname+".txt", "w+") as f:
+			f.write(startcode)
+		dot.render("graphs/"+fname)#, view=True)
+
 
 
 
 def main():
-	data = sys.stdin.read()
 	try:
+		data = sys.stdin.read()
 		code = json.loads(data)
 	except (UnicodeError, json.decoder.JSONDecodeError):
 		os._exit(0)
 
 	world = run(code)
-	visualize(world)
+	visualize(world, data)
 	os._exit(0)
 
 if __name__ == "__main__":
