@@ -1,9 +1,12 @@
 #NAND machine?
 
-HEADERLEN = 7
-H_REC, H_GAS, H_MEM, H_IP, H_CAPW, H_CAPR, H_CAPC = range(HEADERLEN)
 
-HEADER, CODE, DATA = range(3)
+HEADER, CAPS, CODE, DATA = range(4)
+
+HEADERLEN = 4
+H_REC, H_GAS, H_MEM, H_IP = range(HEADERLEN)
+
+CAPW, CAPR, CAPC = range(3)
 
 I_CREATE, I_ALLOC, I_RECURSE, I_NANDI, I_NAND = range(5)
 
@@ -38,14 +41,16 @@ code = [
 
 def pretty(p):
 	h = p[HEADER]
+	c = p[CAPS]
 	numbers = [str(h[i]) for i in [H_REC, H_GAS, H_MEM, H_IP]]
-	bitmaps = [bin(h[i]) for i in [H_CAPW, H_CAPR, H_CAPC]]
-	head = "\t".join(numbers+bitmaps)
+	caps = [str(c[i]) for i in [CAPW, CAPR, CAPC]]
+	head = "\t".join(numbers+caps)
 
 	body = str(p[DATA])# str(p[CODE]) +
 	return head + "\n" + body
 
-process = [[0,1000,1000,0,0x1,0x1,0x1], code, []]
+#TODO: make CAPS dict? other data structure?
+process = [[0,1000,1000,0], [[0],[0],[0]], code, []]
 world = [process]
 
 active = 0
@@ -61,25 +66,29 @@ while True:
 	#TODO: only deserialize here, on demand
 
 	header = this[HEADER]
+	caps = this[CAPS]
 	code = this[CODE]
 
+	def setcap(type, target):
+		caps[type].append(target)
+
 	def has_cap(type, target):
-		return (header[type] >> target) &0x1 == 1
+		return target in caps[type]
 
 	def can_call(target):
-		return has_cap(H_CAPC, target)
+		return has_cap(CAPC, target)
 
 	def can_write(target):
-		return has_cap(H_CAPW, target)
+		return has_cap(CAPW, target)
 
 	def can_read(source):
-		return has_cap(H_CAPR, target)
+		return has_cap(CAPR, target)
 
 	ip = header[H_IP]
 	if ip >= len(code):#could also wrap around for shits and giggles
 		print("OOC JUMP", active)
 		break
-		
+
 	C = code[ip]
 	I = C[0]
 	#TODO check length
@@ -116,19 +125,13 @@ while True:
 		if index >= 64:
 			raise Exception("FUCK")
 
-		world.append([[0, 0, 0, 0, 0x00, 0x00, 0x00], [], []])#FLAT: newheader()+[]+[])#
+		world.append([[0, 0, 0, 0], [[index],[index],[index]], [], []])#FLAT: newheader()+[]+[])#
 
-		cap = 1<<index
-
-		header[H_CAPC] |= cap
-		header[H_CAPW] |= cap
-		header[H_CAPR] |= cap
+		setcap(CAPW, index)
+		setcap(CAPR, index)
+		setcap(CAPC, index)
 
 		# created cap can't read or write to self yet! should this really depend on index? always allow self-access? for now, yes
-		newheader = world[index][HEADER]
-		newheader[H_CAPW] |= cap
-		newheader[H_CAPR] |= cap
-		newheader[H_CAPC] |= cap
 
 	elif I == I_ALLOC:
 		target, size = args
@@ -140,9 +143,9 @@ while True:
 
 		if can_call(target):
 			target_header = world[target][HEADER]
-			target_header[H_CAPW] |= header[H_CAPW] & wmask
-			target_header[H_CAPR] |= header[H_CAPR] & rmask
-			target_header[H_CAPC] |= header[H_CAPC] & cmask
+			target_header[CAPW] |= header[CAPW] & wmask
+			target_header[CAPR] |= header[CAPR] & rmask
+			target_header[CAPC] |= header[CAPC] & cmask
 
 			target_header[H_GAS] = min(header[H_GAS], gas)
 			target_header[H_MEM] = min(header[H_MEM], mem)
