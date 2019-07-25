@@ -8,12 +8,13 @@ H_REC, H_GAS, H_MEM, H_IP = range(HEADERLEN)
 
 CAPW, CAPR, CAPC = range(3)
 
-I_CREATE, I_ALLOC, I_RECURSE, I_NANDI, I_NAND = range(5)
+I_CREATE, I_ALLOC, I_RECURSE, I_MEMSIZE, I_NANDI, I_NAND = range(6)
 
 IGASCOSTS = {
 	I_CREATE: HEADERLEN,
 	I_ALLOC: None,
 	I_RECURSE: 4,
+	I_MEMSIZE: 1,
 	I_NANDI: 2,
 	I_NAND: 3
 }
@@ -22,6 +23,7 @@ IMEMCOSTS = {
 	I_CREATE : HEADERLEN,#plus some constant overhead for lists?
 	I_ALLOC: None,
 	I_RECURSE: 0,
+	I_MEMSIZE: 0,
 	I_NANDI: 0,
 	I_NAND: 0
 }
@@ -50,7 +52,7 @@ def pretty(p):
 	return head + "\n" + body
 
 #TODO: make CAPS dict? other data structure?
-process = [[0,1000,1000,0], [[0],[0],[0]], code, []]
+process = [[0,1000,1000,0], [{0},{0},{0}], code, []]
 world = [process]
 
 active = 0
@@ -69,8 +71,8 @@ while True:
 	caps = this[CAPS]
 	code = this[CODE]
 
-	def setcap(type, target):
-		caps[type].append(target)
+	def set_cap(type, target):
+		caps[type].add(target)
 
 	def has_cap(type, target):
 		return target in caps[type]
@@ -120,16 +122,20 @@ while True:
 
 	header[H_IP] += 1
 
+	def transfer_cap(type, index, table):
+		if index in caps[type]:
+			table[type].add(index)
+
 	if I == I_CREATE:
 		index = len(world)
 		if index >= 64:
 			raise Exception("FUCK")
 
-		world.append([[0, 0, 0, 0], [[index],[index],[index]], [], []])#FLAT: newheader()+[]+[])#
+		world.append([[0, 0, 0, 0], [{index},{index},{index}], [], []])#FLAT: newheader()+[]+[])#
 
-		setcap(CAPW, index)
-		setcap(CAPR, index)
-		setcap(CAPC, index)
+		set_cap(CAPW, index)
+		set_cap(CAPR, index)
+		set_cap(CAPC, index)
 
 		# created cap can't read or write to self yet! should this really depend on index? always allow self-access? for now, yes
 
@@ -139,24 +145,32 @@ while True:
 			world[target][DATA] += [0 for i in range(size)]
 
 	elif I == I_RECURSE:
-		target, gas, mem, wmask, rmask, cmask = args
+		target, gas, mem, wcap, rcap, ccap = args
 
 		if can_call(target):
-			target_header = world[target][HEADER]
-			target_header[CAPW] |= header[CAPW] & wmask
-			target_header[CAPR] |= header[CAPR] & rmask
-			target_header[CAPC] |= header[CAPC] & cmask
+			target_caps = world[target][CAPS]
 
+			# TODO can only transfer 1 cap per call
+			transfer_cap(CAPW, wcap, target_caps)
+			transfer_cap(CAPR, rcap, target_caps)
+			transfer_cap(CAPC, ccap, target_caps)
+
+			target_header = world[target][HEADER]
 			target_header[H_GAS] = min(header[H_GAS], gas)
 			target_header[H_MEM] = min(header[H_MEM], mem)
 
 			header[H_REC] = target
 			active = target
 
+	elif I == I_MEMSIZE:
+		target, target_index, source = args
+		if can_write(target) and can_read(source):
+			world[target][DATA][target_index] = len(world[source])#must be serialized!
+
 	elif I == I_NANDI:
 		#communicate over third domain?
 		target, target_index, data = args
-		if can_write(target):
+		if can_write(target) and can_read(target):
 			# if target isn't flat, can't write code
 			world[target][DATA][target_index] = ~(data & world[target][DATA][target_index])
 
@@ -164,3 +178,22 @@ while True:
 		target, target_index, source, source_index = args
 		if can_write(target) and can_read(source):
 			world[target][DATA][target_index] = ~(data & world[source][DATA][source_index])
+
+from graphviz import Digraph
+
+
+
+def visualize():
+
+	dot = Digraph()
+	dot.format = "svg"
+
+	for pi, proc in enumerate(world):
+		for type in [CAPW, CAPR, CAPC]:
+			for cap in proc[CAPS][type]:
+				print(pi, cap)
+				dot.edge(str(pi), str(cap), color=["red", "green", "blue"][type])
+
+	dot.render("graph", view=True)
+
+visualize()
