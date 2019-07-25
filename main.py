@@ -3,8 +3,12 @@
 
 HEADER, CAPS, CODE, DATA = range(4)
 
-HEADERLEN = 4
-H_REC, H_GAS, H_MEM, H_IP = range(HEADERLEN)
+# Add status flag for non-terminating failures?
+HEADERLEN = 5
+H_STATUS, H_REC, H_GAS, H_MEM, H_IP = range(HEADERLEN)
+
+STATUSLEN = 4
+S_NORMAL, S_OOC, S_OOG, S_OOM = range(STATUSLEN)
 
 CAPW, CAPR, CAPC = range(3)
 
@@ -33,51 +37,6 @@ IMEMCOSTS = {
 	I_NANDI: 0,
 	I_NAND: 0
 }
-
-#allow for reduction of caps?
-
-# does it always jump back to the minimum of all header resources?
-
-#def decode():
-#def start()
-
-code = [
-[I_CREATE],
-[I_TRANSFERCAP, 1, None, None, 0],
-[I_ALLOC, 1, 1],
-[I_WRITESUB, 1, 14, 42],
-[I_RECURSE, 1, 100, 100],
-]
-
-def pretty(p):
-	#print(p)
-	if isinstance(p[0], list):
-		p = flat(p)
-	print(p)
-	if not isinstance(p[0], list):
-		p = sharp(p)
-	h = p[HEADER]
-	c = p[CAPS]
-	numbers = [str(h[i]) for i in [H_REC, H_GAS, H_MEM, H_IP]]
-	caps = [str(c[i]) for i in [CAPW, CAPR, CAPC]]
-	head = "\t".join(numbers+caps)
-
-	body = str(p[DATA])# str(p[CODE]) +
-	return head + "\n" + body
-
-#TODO: make CAPS dict? other data structure?
-process = [[0,1000,1000,0], [{0},{0},{0}], code, []]
-world = [process]
-
-active = 0
-#traverse H_REC here?
-
-STEP = 0
-
-def debug():
-	print("\nSTEP#"	 + str(STEP), INAMES[I])
-	for proc in world:
-		print(pretty(proc))
 
 def flat(s):
 	caps = []
@@ -118,10 +77,91 @@ def sharp(f):
 	#print("RET", s)
 	return s
 
+def pretty(p):
+	if isinstance(p[0], list):
+		p = flat(p)
+	#print(p)
+	if not isinstance(p[0], list):
+		p = sharp(p)
+	h = p[HEADER]
+	c = p[CAPS]
+	numbers = [str(h[i]) for i in [H_REC, H_GAS, H_MEM, H_IP]]
+	caps = [str(c[i]) for i in [CAPW, CAPR, CAPC]]
+	head = "\t".join(numbers+caps)
+
+	body = str(p[DATA])# str(p[CODE]) +
+	return head + "\n" + body
+
+#allow for reduction of caps?
+
+# does it always jump back to the minimum of all header resources?
+
+#def decode():
+#def start()
+
+code = [
+[I_CREATE],
+[I_TRANSFERCAP, 1, None, None, 0],
+[I_ALLOC, 1, 1],
+[I_WRITESUB, 1, 15, 42],
+[I_RECURSE, 1, 100, 100],
+]
+
+def ensure_sharp(target):
+	if not isinstance(world[target][0], list):
+		world[target] = sharp(world[target])
+
+def ensure_flat(target):
+	if isinstance(world[target][0], list):
+		world[target] = flat(world[target])
+
+def ensure_mutable(target, target_index):
+	ensure_flat(target)
+	# TODO: in this unoptimized serialization format, 4 reads required!
+	t = world[target]
+	headerlen = t[0]
+	wcaplen = t[1+headerlen]
+	rcaplen = t[1+headerlen+1+wcaplen]
+	ccaplen = t[1+headerlen+1+wcaplen+1+rcaplen]
+	#print("TARGET", target_index, headerlen, wcaplen, rcaplen, ccaplen)
+	endofcaps = 1+headerlen+1+wcaplen+1+rcaplen+1+ccaplen
+	if target_index < endofcaps:
+		raise Exception("IMMUTABLE")
+
+#TODO: make CAPS dict? other data structure?
+process = [[S_NORMAL,0,1000,1000,0], [{0},{0},{0}], code, []]
+world = [process]
+
+def debug():
+	print("\nSTEP#"	 + str(STEP), INAMES[I])
+	for proc in world:
+		print(pretty(proc))
+
+start = 0
+chain = [start]
+
+while True:
+	current = chain[-1]
+	ensure_sharp(current)
+	rec = world[current][HEADER][H_REC]
+	if rec != current:
+		chain.append(rec)
+	else:
+		break
+
+print("CHAIN", chain)
+#traverse H_REC here?
+
+STEP = 0
 while True:
 	STEP += 1
 
-	this = world[active]
+	# TODO add jump-back logic to last process in parent chain that has sufficient resources
+
+	if len(chain) == 0:
+		print("END")
+		break
+	this = world[chain[-1]]
 
 	#TODO: only deserialize here, on demand
 
@@ -129,26 +169,20 @@ while True:
 	caps = this[CAPS]
 	code = this[CODE]
 
-	def ensure_sharp(target):
-		if not isinstance(world[target][0], list):
-			world[target] = sharp(world[target])
+	JB = False
 
-	def ensure_flat(target):
-		if isinstance(world[target][0], list):
-			world[target] = flat(world[target])
-
-	def ensure_mutable(target, target_index):
-		ensure_flat(target)
-		# TODO: in this unoptimized serialization format, 4 reads required!
-		t = world[target]
-		headerlen = t[0]
-		wcaplen = t[1+headerlen]
-		rcaplen = t[1+headerlen+1+wcaplen]
-		ccaplen = t[1+headerlen+1+wcaplen+1+rcaplen]
-		#print("TARGET", target_index, headerlen, wcaplen, rcaplen, ccaplen)
-		endofcaps = 1+headerlen+1+wcaplen+1+rcaplen+1+ccaplen
-		if target_index < endofcaps:
-			raise Exception("IMMUTABLE")
+	def jump_back(condition, to=None):
+		global chain, JB
+		JB = True
+		header[H_STATUS] = condition
+		# TODO make this nicer
+		if to is None:
+			world[active] = flat(world[active])
+			chain = chain[:-1]
+		else:
+			for i in range(len(world)-1, to, -1):
+				world[i] = flat(world[i])
+				chain = chain[:-1]
 
 	def set_cap(type, target):
 		caps[type].add(target)
@@ -172,9 +206,10 @@ while True:
 
 	ip = header[H_IP]
 	if ip >= len(code):#could also wrap around for shits and giggles
-		print("OOC JUMP", active)
-		break
+		jump_back(S_OOC)
+		continue
 
+	print(ip, len(code))
 	C = code[ip]
 	I = C[0]
 	#TODO check length
@@ -184,12 +219,6 @@ while True:
 	if gascost is None:
 		gascost = args[1]#size arg for ALLOC
 
-	if header[H_GAS] < gascost:
-		print("OOG JUMP")
-		break
-
-	header[H_GAS] -= gascost
-
 	memcost = IMEMCOSTS[I]
 	if memcost is None:
 		if I == I_ALLOC:
@@ -197,11 +226,22 @@ while True:
 		elif I == I_TRANSFERCAP:
 			memcost = sum([1 for c in args[1:] if c is not None])
 
-	if header[H_MEM] < memcost:
-		print("OOM JUMP")
-		break
+	for node_index, node in enumerate(chain):
+		node_header = world[node][HEADER]
+		if node_header[H_GAS] < gascost:
+			jump_back(S_OOG, node_index-1)
+			break
+		if node_header[H_MEM] < memcost:
+			jump_back(S_OOM, node_index-1)
+			break
 
-	header[H_MEM] -= memcost
+	if JB:
+		continue
+
+	# First check all conditions, then change the state!
+	for node_index, node in enumerate(chain):
+		world[node][HEADER][H_GAS] -= gascost
+		world[node][HEADER][H_MEM] -= memcost
 
 	debug()
 
@@ -210,7 +250,7 @@ while True:
 	if I == I_CREATE:
 		index = len(world)
 
-		newproc = flat([[0, 0, 0, 0], [{index},{index},{index}], [], []])
+		newproc = flat([[0, 0, 0, 0, 0], [{index},{index},{index}], [], []])
 		#print("NEW", newproc)
 		world.append(newproc)
 
@@ -262,6 +302,7 @@ while True:
 		target, target_index, data = args
 		if can_write(target):
 			ensure_mutable(target, target_index)
+			#TODO ensure_flat, ensure not self
 			world[target][target_index] = data
 			print("WRITING")
 
