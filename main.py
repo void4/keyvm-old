@@ -9,10 +9,10 @@ H_STATUS, H_REC, H_GAS, H_MEM, H_IP = range(HEADERLEN)
 
 STATUSLEN = 6
 S_NORMAL, S_OOC, S_OOG, S_OOM, S_OOA, S_OOF = range(STATUSLEN)
+SNAMES = "S_NORMAL, S_OOC, S_OOG, S_OOM, S_OOA, S_OOF".split(", ")
 
 NUMINSTR = 7
 I_CREATE, I_ALLOC, I_TRANSFERCAP, I_RECURSE, I_MEMSIZE, I_MEMWRITE, I_MEMCREATE = range(NUMINSTR)
-
 INAMES = "I_CREATE, I_ALLOC, I_TRANSFERCAP, I_RECURSE, I_MEMSIZE, I_MEMWRITE, I_MEMCREATE".split(", ")
 
 ARGLEN = {
@@ -113,14 +113,24 @@ def validate(sharp):
 	firstlevel = isinstance(sharp, list) and isinstance(sharp[0], list) and isinstance(sharp[1], set) and isinstance(sharp[2], list)
 	if not firstlevel:
 		return False
-	secondlevel = all([isinstance(instr, list) and all([isinstance(i, int) for i in instr]) for instr in sharp[2]])
+	secondlevel = all([isinstance(instr, list) and all([isinstance(i, int) and i>=0 for i in instr]) for instr in sharp[2]])
 	if not secondlevel:
 		return False
+
+	thirdlevel = all([isinstance(instr, list) and all([isinstance(i, int) and i>= 0 for i in instr]) for instr in sharp[3]])
+	if not thirdlevel:
+		return False
+
 	return True
 
 def run(code):
 	#TODO: make CAPS dict? other data structure?
 	process = [[S_NORMAL,0,1000,1000,0], {0}, code, []]
+
+	if not validate(process):
+		print("INTRO VALIDATE FAIL")
+		exit(1)
+
 	world = [process]
 
 	def debug():
@@ -145,7 +155,7 @@ def run(code):
 	STEP = 0
 	while True:
 		STEP += 1
-
+		print(STEP)
 		# TODO add jump-back logic to last process in parent chain that has sufficient resources
 
 		if len(chain) == 0:
@@ -154,10 +164,10 @@ def run(code):
 			#break
 		this = world[chain[-1]]
 
-		if not validate(this):
+		#if not validate(this):
 			#jump_back(S_OOF)
 			#continue
-			os._exit(1)
+		#	os._exit(1)
 
 		#TODO: only deserialize here, on demand
 
@@ -227,7 +237,7 @@ def run(code):
 
 		for node_index, node in enumerate(chain):
 			node_header = world[node][HEADER]
-			if not validate(node):
+			if not validate(world[node]):
 				#TODO this is too heavy
 				jump_back(S_OOF, node_index-1)
 				break
@@ -318,6 +328,13 @@ def run(code):
 code = [
 [I_MEMCREATE],
 [I_ALLOC, 0, 10],
+[I_CREATE, 0],
+[I_TRANSFERCAP, 1, 0],
+[I_RECURSE, 1, 100, 100],
+[I_ALLOC, 0, 10],
+]
+
+"""
 [I_MEMWRITE, 0, 0, HEADERLEN],
 [I_MEMWRITE, 0, 1, 0],
 [I_MEMWRITE, 0, 2, 0],
@@ -328,18 +345,13 @@ code = [
 [I_MEMWRITE, 0, 7, 1],
 [I_MEMWRITE, 0, 8, 0],
 [I_MEMWRITE, 0, 9, 0],
-[I_CREATE, 0],
-[I_TRANSFERCAP, 1, 0],
-[I_RECURSE, 1, 100, 100],
-[I_ALLOC, 0, 10],
-]
+"""
 
 import json
 import os
 import sys
 
 from time import time
-
 
 from graphviz import Digraph
 
@@ -362,21 +374,26 @@ def visualize(world, startcode):
 			edges += 1
 			dot.edge(name(pi), name(cap), color="black")
 
-	if edges > 3:
+	if edges > 4:
 		fname = str(int(time()*10000))
 		with open("graphs/"+fname+".txt", "w+") as f:
 			f.write(startcode)
-		dot.render("graphs/"+fname)#, view=True)
+		dot.render("graphs/"+fname, view=False)
 
-
-
+"""
+startcode = str(code)
+world = run(code)
+print(code)
+print(SNAMES[world[0][0][0]])
+visualize(world, startcode)
+"""
 
 def main():
 	try:
 		data = sys.stdin.read()
 		code = json.loads(data)
-	except (UnicodeError, json.decoder.JSONDecodeError):
-		os._exit(0)
+	except (UnicodeError, json.decoder.JSONDecodeError, RecursionError):
+		os._exit(1)
 
 	world = run(code)
 	visualize(world, data)
