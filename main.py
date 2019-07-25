@@ -10,6 +10,8 @@ CAPW, CAPR, CAPC = range(3)
 
 I_CREATE, I_ALLOC, I_TRANSFERCAP, I_RECURSE, I_MEMSIZE, I_NANDI, I_NAND = range(7)
 
+INAMES = "I_CREATE, I_ALLOC, I_TRANSFERCAP, I_RECURSE, I_MEMSIZE, I_NANDI, I_NAND".split(", ")
+
 IGASCOSTS = {
 	I_CREATE: HEADERLEN,
 	I_ALLOC: None,
@@ -45,6 +47,8 @@ code = [
 ]
 
 def pretty(p):
+	if not isinstance(p[0], list):
+		p = sharp(p)
 	h = p[HEADER]
 	c = p[CAPS]
 	numbers = [str(h[i]) for i in [H_REC, H_GAS, H_MEM, H_IP]]
@@ -64,9 +68,48 @@ active = 0
 STEP = 0
 
 def debug():
-	print("\nSTEP#"	 + str(STEP), I)
+	print("\nSTEP#"	 + str(STEP), INAMES[I])
 	for proc in world:
 		print(pretty(proc))
+
+def flat(s):
+	caps = []
+	for i in range(len(s[CAPS])):
+		caps += [len(s[CAPS][i])] + list(s[CAPS][i])
+
+	code = []
+	for instruction in s[CODE]:
+		code += len(instruction)
+		code += instruction
+
+	return [len(s[HEADER])] + s[HEADER] + caps + [len(s[CODE])] + code + [len(s[DATA])] + s[DATA]
+
+def sharp(f):
+
+	index = 0
+	def read():
+		nonlocal index
+		d = f[index]
+		index += 1
+		return d
+
+	l = read()
+	header = [read() for i in range(l)]
+
+	caps = []
+	for i in range(3):
+		l = read()
+		caps.append({read() for j in range(l)})
+
+	l = read()
+	code = [[read() for j in range(read())] for i in range(l)]
+
+	l = read()
+	data = [read() for i in range(l)]
+
+	s = [header, caps, code, data]
+	#print("RET", s)
+	return s
 
 while True:
 	STEP += 1
@@ -141,7 +184,9 @@ while True:
 		if index >= 64:
 			raise Exception("FUCK")
 
-		world.append([[0, 0, 0, 0], [{index},{index},{index}], [], []])#FLAT: newheader()+[]+[])#
+		newproc = flat([[0, 0, 0, 0], [{index},{index},{index}], [], []])
+		#print("NEW", newproc)
+		world.append(newproc)
 
 		set_cap(CAPW, index)
 		set_cap(CAPR, index)
@@ -152,23 +197,29 @@ while True:
 	elif I == I_ALLOC:
 		target, size = args
 		if can_write(target):
+			world[target] = sharp(world[target])
 			world[target][DATA] += [0 for i in range(size)]
+			world[target] = flat(world[target])
 
 	elif I == I_TRANSFERCAP:
 		target, wcap, rcap, ccap = args
 
 		if can_call(target):
+			world[target] = sharp(world[target])
+
 			target_caps = world[target][CAPS]
 
 			# TODO can only transfer 1 cap per call
 			transfer_cap(CAPW, wcap, target_caps)
 			transfer_cap(CAPR, rcap, target_caps)
 			transfer_cap(CAPC, ccap, target_caps)
+			world[target] = flat(world[target])
 
 	elif I == I_RECURSE:
 		target, gas, mem = args
 
 		if can_call(target):
+			world[target] = sharp(world[target])
 
 			target_header = world[target][HEADER]
 			target_header[H_GAS] = min(header[H_GAS], gas)
