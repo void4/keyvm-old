@@ -181,8 +181,6 @@ while True:
 
 	if I == I_CREATE:
 		index = len(world)
-		if index >= 64:
-			raise Exception("FUCK")
 
 		newproc = flat([[0, 0, 0, 0], [{index},{index},{index}], [], []])
 		#print("NEW", newproc)
