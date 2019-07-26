@@ -3,69 +3,7 @@
 def flatten(listoflists):
 	return sum(listoflists, [])
 
-WORDSIZE = 2**16
-
-HEADER, CAPS, CODE, DATA = range(4)
-
-# Add status flag for non-terminating failures?
-HEADERLEN = 5
-H_STATUS, H_REC, H_GAS, H_MEM, H_IP = range(HEADERLEN)
-
-STATUSLEN = 6
-S_NORMAL, S_OOC, S_OOG, S_OOM, S_OOA, S_OOF = range(STATUSLEN)
-SNAMES = "S_NORMAL, S_OOC, S_OOG, S_OOM, S_OOA, S_OOF".split(", ")
-
-NUMINSTR = 13
-I_CREATE, I_ALLOC, I_TRANSFERCAP, I_RECURSE, I_MEMSIZE, I_MEMWRITE, I_MEMCREATE, I_ADD, I_SUB, I_JUMP, I_JUMPIF, I_CODEREAD, I_CODELEN = range(NUMINSTR)
-INAMES = "I_CREATE, I_ALLOC, I_TRANSFERCAP, I_RECURSE, I_MEMSIZE, I_MEMWRITE, I_MEMCREATE, I_ADD, I_SUB, I_JUMP, I_JUMPIF, I_CODEREAD, I_CODELEN".split(", ")
-
-ARGLEN = {
-	I_CREATE: 1,
-	I_ALLOC: 2,
-	I_TRANSFERCAP: 2,
-	I_RECURSE: 3,
-	I_MEMSIZE: 1,
-	I_MEMWRITE: 3,
-	I_MEMCREATE: 0,
-	I_ADD: 3,
-	I_SUB: 3,
-	I_JUMP: 1,
-	I_JUMPIF: 3,
-	I_CODEREAD: 3,
-	I_CODELEN: 2,
-}
-
-IGASCOSTS = {
-	I_CREATE: HEADERLEN,
-	I_ALLOC: None,
-	I_TRANSFERCAP: 6,
-	I_RECURSE: 20,
-	I_MEMSIZE: 1,
-	I_MEMWRITE: 2,
-	I_MEMCREATE: 4,
-	I_ADD: 5,
-	I_SUB: 5,
-	I_JUMP: 2,
-	I_JUMPIF: 5,
-	I_CODEREAD: 8,
-	I_CODELEN: 3,#TODO: mind flatten()
-}
-
-IMEMCOSTS = {
-	I_CREATE : HEADERLEN,#plus some constant overhead for lists?
-	I_ALLOC: None,
-	I_TRANSFERCAP: None,
-	I_RECURSE: 0,
-	I_MEMSIZE: 0,
-	I_MEMWRITE: 0,
-	I_MEMCREATE: 2,
-	I_ADD: 0,
-	I_SUB: 0,
-	I_JUMP: 0,
-	I_JUMPIF: 0,
-	I_CODEREAD: 0,
-	I_CODELEN: 0,
-}
+from instructions import *
 
 def flat(s):
 	# TODO refactor this to have all the length in the front, like in ye olden times
@@ -82,7 +20,7 @@ def flat(s):
 		data += [len(d)]
 		data += d
 
-	return [len(s[HEADER])] + s[HEADER] + caps + [len(s[CODE])] + code + [len(s[DATA])] + data
+	return [len(s[HEADER])] + s[HEADER] + caps + [len(s[CODE])] + code + [len(s[DATA])] + data + [len(s[STACK])] + stack
 
 def sharp(f):
 	#print(f)
@@ -108,7 +46,10 @@ def sharp(f):
 		dl = read()
 		data += [read() for j in range(dl)]
 
-	s = [header, caps, code, data]
+	l = read()
+	stack = [read() for i in range(l)]
+
+	s = [header, caps, code, data, stack]
 	#print("RET", s)
 	return s
 
@@ -132,22 +73,27 @@ def pretty(p):
 # does it always jump back to the minimum of all header resources?
 
 def validate(sharp):
-	firstlevel = isinstance(sharp, list) and isinstance(sharp[0], list) and isinstance(sharp[1], set) and isinstance(sharp[2], list)
+	firstlevel = isinstance(sharp, list) and isinstance(sharp[HEADER], list) and isinstance(sharp[CAPS], set)
 	if not firstlevel:
+		print("first")
 		return False
-	secondlevel = all([isinstance(instr, list) and all([isinstance(i, int) and i>=0 for i in instr]) for instr in sharp[2]])
-	if not secondlevel:
+	datacheck = isinstance(sharp[DATA], list) and all([isinstance(instr, list) and all([isinstance(i, int) and i>=0 for i in instr]) for instr in sharp[DATA]])
+	if not datacheck:
 		return False
 
-	thirdlevel = all([isinstance(instr, list) and all([isinstance(i, int) and i>= 0 for i in instr]) for instr in sharp[3]])
-	if not thirdlevel:
+	codecheck = isinstance(sharp[CODE], list) and all([isinstance(instr, list) and all([isinstance(i, int) and i>= 0 for i in instr]) for instr in sharp[CODE]])
+	if not codecheck:
+		return False
+
+	stackcheck = isinstance(sharp[STACK], list) and all([isinstance(i, int) for i in sharp[STACK]])
+	if not stackcheck:
 		return False
 
 	return True
 
 def run(code):
 	#TODO: make CAPS dict? other data structure?
-	process = [[S_NORMAL,0,1000,1000,0], {0}, code, []]
+	process = [[S_NORMAL,0,1000,1000,0], {0}, code, [], []]
 
 	if not validate(process):
 		print("INTRO VALIDATE FAIL")
@@ -196,6 +142,7 @@ def run(code):
 		header = this[HEADER]
 		caps = this[CAPS]
 		code = this[CODE]
+		stack = this[STACK]
 
 		JB = False
 
@@ -243,26 +190,36 @@ def run(code):
 		#TODO check length
 		args = C[1:]
 
-		if len(args) != ARGLEN[I]:
+		IMMEDIATE = {
+			I_PUSH: 1
+		}
+
+		if (I not in IMMEDIATE and len(args) != 0) or (I in IMMEDIATE and len(args) != IMMEDIATE[I]):
 			print("arglen")
 			jump_back(S_OOA, len(chain)-2)
 			continue
 
+		if len(stack) < ARGLEN[I]:
+			print(len(stack), ARGLEN[I], INAMES[I])
+			jump_back(S_OOS)
+			continue
+
 		gascost = IGASCOSTS[I]
 		if gascost is None:
-			gascost = args[1]#size arg for ALLOC
+			gascost = stack[-1]#size arg for ALLOC
 
 		memcost = IMEMCOSTS[I]
 		if memcost is None:
 			if I == I_ALLOC:
-				memcost = args[1]#size arg for ALLOC
+				memcost = stack[-1]#size arg for ALLOC
 			elif I == I_TRANSFERCAP:
-				memcost = sum([1 for c in args[1:] if c is not None])
+				memcost = 1
 
 		for node_index, node in enumerate(chain):
 			node_header = world[node][HEADER]
 			if not validate(world[node]):
 				#TODO this is too heavy
+				print("noval")
 				jump_back(S_OOF, node_index-1)
 				break
 			if node_header[H_GAS] < gascost:
@@ -285,8 +242,15 @@ def run(code):
 
 		header[H_IP] += 1
 
+		def pop(n=1):
+			args = [stack.pop(-1) for i in range(n)]
+			return args[::-1]
+
+		def pop1():
+			return stack.pop(-1)
+
 		if I == I_CREATE:
-			memory = args[0]
+			memory = pop1()
 			index = len(world)
 
 			try:
@@ -302,7 +266,7 @@ def run(code):
 			set_cap(index)
 
 		elif I == I_ALLOC:
-			memory, size = args
+			memory, size = pop(2)
 			try:
 				this[DATA][memory] += [0 for i in range(size)]
 			except IndexError:
@@ -313,14 +277,14 @@ def run(code):
 
 		elif I == I_TRANSFERCAP:
 			# TODO can only transfer 1 cap per call
-			target, cap = args
+			target, cap = pop(2)
 
 			if has_cap(target):
 				target_caps = world[target][CAPS]
 				transfer_cap(cap, target_caps)
 
 		elif I == I_RECURSE:
-			target, gas, mem = args
+			target, gas, mem = pop(3)
 
 			if has_cap(target):
 
@@ -333,7 +297,7 @@ def run(code):
 				chain.append(target)
 
 		elif I == I_MEMSIZE:
-			target_index = args[0]
+			target_index = pop1()
 			try:
 				this[DATA][target_index] = len(this[DATA])#must be serialized!
 			except IndexError:
@@ -342,7 +306,7 @@ def run(code):
 				continue
 
 		elif I == I_MEMWRITE:
-			memory, address, data = args
+			memory, address, data = pop(3)
 			try:
 				this[DATA][memory][address] = data
 			except IndexError:
@@ -354,7 +318,7 @@ def run(code):
 			this[DATA].append([])
 
 		elif I == I_ADD:
-			memory, address1, address2 = args
+			memory, address1, address2 = pop(3)
 			try:
 				this[DATA][memory][address1] = (this[DATA][memory][address1]+this[DATA][memory][address2]) % WORDSIZE
 			except IndexError:
@@ -362,7 +326,7 @@ def run(code):
 				continue
 
 		elif I == I_SUB:
-			memory, address1, address2 = args
+			memory, address1, address2 = pop(3)
 			try:
 				this[DATA][memory][address1] = (this[DATA][memory][address1]-this[DATA][memory][address2]) % WORDSIZE
 			except IndexError:
@@ -370,11 +334,11 @@ def run(code):
 				continue
 
 		elif I == I_JUMP:
-			target = args[0]
+			target = pop1()
 			this[HEADER][H_IP] = target
 
 		elif I == I_JUMPIF:
-			target, memory, address = args
+			target, memory, address = pop(3)
 			try:
 				if this[DATA][memory][address] > 0:
 					this[HEADER][H_IP] = target
@@ -383,20 +347,23 @@ def run(code):
 				continue
 
 		elif I == I_CODEREAD:
-			code_index, memory, address = args
+			code_index, memory, address = pop(3)
 			try:
-				this[DATA][memory][address] = flatten(this[CODE])[code_index]
+				this[DATA][memory][address] = flat(this)[code_index]#flatten(this[CODE])[code_index]
 			except IndexError:
 				jump_back(S_OOA)
 				continue
 
 		elif I == I_CODELEN:
-			memory, address = args
+			memory, address = pop(2)
 			try:
-				this[DATA][memory][address] = len(flatten(this[CODE]))
+				this[DATA][memory][address] = len(flat(this))#len(flatten(this[CODE]))
 			except IndexError:
 				jump_back(S_OOA)
 				continue
+
+		elif I == I_PUSH:
+			this[STACK].append(args[0])
 
 import json
 import os
@@ -432,100 +399,22 @@ def visualize(world, startcode):
 		fname = str(int(time()*10000))
 		with open("graphs/"+fname+".txt", "w+") as f:
 			f.write(startcode)
-		dot.render("graphs/"+fname, view=True)
+		dot.render("graphs/"+fname, view=False)
 
-"""
-from random import random, randint, choice
+from asmutils import asm
+from assembler import assemble
 
-def small():
-	return randint(0,8)
-
-def big():
-	return randint(0,32)
-
-GEN = {
-	I_CREATE: [small],
-	I_ALLOC: [small, big],
-	I_TRANSFERCAP: [small, small],
-	I_RECURSE: [small, big, big],
-	I_MEMSIZE: [small],
-	I_MEMWRITE: [small, big, big],
-	I_MEMCREATE: [],
-	I_ADD: [small, big, big],
-	I_SUB: [small, big, big],
-	I_JUMP: [big],
-	I_JUMPIF: [small, big, big],
-}
-
-def gencode():
-
-	code = []
-
-	for i in range(randint(10,50)):
-		instr = randint(0, NUMINSTR-1)
-		code.append([instr]+[f() for f in GEN[instr]])
-	#print(code)
-	return code
-
-for i in range(10000):
-	code = gencode()
-	startcode = str(code)
-	world = run(code)
-	#print(code)
-	#print(SNAMES[world[0][0][0]])
-	visualize(world, startcode)
-"""
-
-"""
-
-def main():
-	try:
-		data = sys.stdin.read()
-		code = json.loads(data)
-	except (UnicodeError, json.decoder.JSONDecodeError, RecursionError):
-		os._exit(1)
-
-	world = run(code)
-	visualize(world, data)
-	os._exit(0)
+treecode = "jump(0)"
+print(treecode)
+assembler = "\n".join(asm(treecode))
+print(assembler)
+binary = assemble(assembler)
+print(binary)
 
 if __name__ == "__main__":
-	import afl
-	afl.start()
-	main()
-"""
-
-#H_STATUS, H_REC, H_GAS, H_MEM, H_IP
-code = [
-[I_MEMCREATE],
-[I_ALLOC, 0, 15],
-
-[I_MEMWRITE, 0, 0, HEADERLEN],
-[I_MEMWRITE, 0, 1, S_NORMAL],
-[I_MEMWRITE, 0, 2, 0],
-[I_MEMWRITE, 0, 3, 100],
-[I_MEMWRITE, 0, 4, 100],
-[I_MEMWRITE, 0, 5, 0],#ip
-[I_MEMWRITE, 0, 6, 0],#cap
-[I_MEMWRITE, 0, 7, 2],#code
-[I_MEMWRITE, 0, 8, 1],
-[I_MEMWRITE, 0, 9, I_MEMCREATE],
-[I_MEMWRITE, 0, 10, 1+ARGLEN[I_ALLOC]],
-[I_MEMWRITE, 0, 11, I_ALLOC],
-[I_MEMWRITE, 0, 12, 0],
-[I_MEMWRITE, 0, 13, 15],
-[I_MEMWRITE, 0, 14, 0],#data
-
-[I_CREATE, 0],
-[I_TRANSFERCAP, 1, 0],
-
-
-[I_RECURSE, 1, 100, 100],
-[I_ALLOC, 0, 10],
-]
-
-startcode = str(code)
-world = run(code)
-#print(code)
-#print(SNAMES[world[0][0][0]])
-visualize(world, startcode)
+	startcode = str(binary)
+	world = run(binary)
+	#print(code)
+	print(world)
+	print(SNAMES[world[0][0][0]])
+	visualize(world, startcode)
