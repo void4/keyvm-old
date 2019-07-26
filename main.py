@@ -93,7 +93,7 @@ def validate(sharp):
 
 def run(code):
 	#TODO: make CAPS dict? other data structure?
-	process = [[S_NORMAL,0,1000,1000,0], {0}, code, [], []]
+	process = [[S_NORMAL,0,10000,10000,0], {0}, code, [], []]
 
 	if not validate(process):
 		print("INTRO VALIDATE FAIL")
@@ -239,7 +239,7 @@ def run(code):
 			world[node][HEADER][H_MEM] -= memcost
 
 		#debug()
-		print("STEP", STEP, INAMES[I], args[0] if args else "None", this[STACK], this[DATA])
+		print(len(chain), "> STEP", STEP, "#%s" % header[H_IP], INAMES[I], args[0] if args else "None", this[STACK], this[DATA])
 
 		header[H_IP] += 1
 
@@ -340,7 +340,7 @@ def run(code):
 			this[HEADER][H_IP] = target
 
 		elif I == I_JUMPIF:
-			memory, address, target = pop(3)
+			memory, address, target	 = pop(3)
 			try:
 				if this[DATA][memory][address] > 0:
 					this[HEADER][H_IP] = target
@@ -393,10 +393,7 @@ alloc(1, mempush(0,0))
 loop:
 sub(0,0,1)
 coderead(1,mempush(0,0),mempush(0,0))
-jumpif(0,0,:end)
-jump(:loop)
-
-end:
+jumpif(0,0,:loop)
 
 recurse(sub(create(1), 1),1000,1000)
 
