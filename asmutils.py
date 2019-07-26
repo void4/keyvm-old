@@ -3,7 +3,7 @@ from instructions import ARGLEN, INAMES
 import time
 
 asmgrammar = r"""
-%ignore /[\t \f]+/  // Whitespace
+%ignore /[\t \f\n]+/  // Whitespace
 NAME: /[a-zA-Z_]\w*/
 NUMBER: DEC_NUMBER
 DEC_NUMBER: /0|[1-9]\d*/i

@@ -404,7 +404,9 @@ def visualize(world, startcode):
 from asmutils import asm
 from assembler import assemble
 
-treecode = "jump(0)"
+treecode = """
+jump(0)
+"""
 print(treecode)
 assembler = "\n".join(asm(treecode))
 print(assembler)
