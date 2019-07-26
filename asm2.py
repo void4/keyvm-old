@@ -56,6 +56,7 @@ def assemble(code):
         else:
             instrcounter += 1
             wordcounter += 1
+        print(instrcounter, instr)
 
     print(labels)
     binary = []

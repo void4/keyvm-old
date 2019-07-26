@@ -171,6 +171,7 @@ def run(code):
 
 		ip = header[H_IP]
 		if ip >= len(code):#could also wrap around for shits and giggles
+			print("lencode")
 			jump_back(S_OOC)
 			continue
 
@@ -179,6 +180,7 @@ def run(code):
 			C = code[ip]
 			I = C[0]
 		except IndexError:
+			print("ipindex")
 			jump_back(S_OOC)
 			continue
 
@@ -198,9 +200,9 @@ def run(code):
 			print("arglen")
 			jump_back(S_OOA, len(chain)-2)
 			continue
-
+		#print("STACK", this[STACK])
 		if len(stack) < ARGLEN[I]:
-			print(len(stack), ARGLEN[I], INAMES[I])
+			print("ARGLEN", "Stacklen:", len(this[STACK]), "Arglen:", ARGLEN[I], INAMES[I])
 			jump_back(S_OOS)
 			continue
 
@@ -239,9 +241,9 @@ def run(code):
 			world[node][HEADER][H_MEM] -= memcost
 
 		#debug()
-		print(len(chain), "> STEP", STEP, "#%s" % header[H_IP], INAMES[I], args[0] if args else "None", this[STACK], this[DATA])
+		#print(len(chain), "> STEP", STEP, "#%s" % header[H_IP], INAMES[I], args[0] if args else "None", this[STACK])#, this[DATA])
 
-		header[H_IP] += 1
+		JUMP = False
 
 		def pop(n=1):
 			args = [stack.pop(-1) for i in range(n)]
@@ -254,11 +256,16 @@ def run(code):
 			memory = pop1()
 			index = len(world)
 
-			try:
-				newproc = sharp(this[DATA][memory])
-			except IndexError:
+			#try:
+			#	print(len(this[DATA]), memory)
+			#	print(this[DATA][memory])
+			print(this[DATA][memory])
+			newproc = sharp(this[DATA][memory])
+			#except IndexError as e:
 				#TODO set STATUS
-				continue
+			#	print("FAILCREATE", e)
+			#	jump_back(S_OOF)
+			#	continue
 			newproc[HEADER] = [S_NORMAL, 0, 0, 0, 0]
 			newproc[CAPS] = set()#TODO it's own call cap! (?)
 			print("NEW", newproc)
@@ -338,12 +345,14 @@ def run(code):
 		elif I == I_JUMP:
 			target = pop1()
 			this[HEADER][H_IP] = target
+			JUMP = True
 
 		elif I == I_JUMPIF:
 			memory, address, target	 = pop(3)
 			try:
 				if this[DATA][memory][address] > 0:
 					this[HEADER][H_IP] = target
+					JUMP = True
 			except IndexError as e:
 				print("jumpif", e)
 				jump_back(S_OOF)
@@ -376,30 +385,42 @@ def run(code):
 			except IndexError:
 				jump_back(S_OOA)
 				continue
+		if I == I_FORK:
+			#memory = pop1()
+			index = len(world)
+
+			#try
+			from copy import deepcopy
+			newproc = deepcopy(this)
+			#except IndexError as e:
+				#TODO set STATUS
+			#	print("FAILCREATE", e)
+			#	jump_back(S_OOF)
+			#	continue
+			newproc[HEADER] = [S_NORMAL, 0, 0, 0, 0]
+			newproc[CAPS] = set()#TODO it's own call cap! (?)
+			print("NEW", newproc)
+			world.append(newproc)
+
+			set_cap(index)
+			this[STACK].append(index)
+
+
+		if not JUMP:
+			header[H_IP] += 1
 
 from visualize import visualize
 
 from asm2 import asm
 
+#codelen(0,0)
 assembler = """
-memcreate
-alloc(0,2)
-codelen(0,0)
-memwrite(0,1,1)
+recurse(fork(), 1000, 1000)
+"""
 
-memcreate
-alloc(1, mempush(0,0))
-
-loop:
-sub(0,0,1)
-coderead(1,mempush(0,0),mempush(0,0))
-jumpif(0,0,:loop)
-
-recurse(sub(create(1), 1),1000,1000)
-
-"""# ; should this push the index?
 binary = asm(assembler)
 print(binary)
+print("LEN", len(binary))
 
 if __name__ == "__main__":
 	startcode = str(binary)

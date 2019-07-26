@@ -30,4 +30,4 @@ def visualize(world, startcode):
 		fname = str(int(time()*10000))
 		with open("graphs/"+fname+".txt", "w+") as f:
 			f.write(startcode)
-		dot.render("graphs/"+fname, view=False)
+		dot.render("graphs/"+fname, view=True)
