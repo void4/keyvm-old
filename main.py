@@ -406,6 +406,7 @@ from assembler import assemble
 
 treecode = """
 jump(0)
+jump(0)
 """
 print(treecode)
 assembler = "\n".join(asm(treecode))

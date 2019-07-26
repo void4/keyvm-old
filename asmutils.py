@@ -8,14 +8,15 @@ NAME: /[a-zA-Z_]\w*/
 NUMBER: DEC_NUMBER
 DEC_NUMBER: /0|[1-9]\d*/i
 
-start: expr
-expr: NAME ["(" expr [("," expr)*] ")"] | NUMBER
+start: expr*
+expr: NAME "(" expr [("," expr)*] ")" | NUMBER
 """
 asml = Lark(asmgrammar, debug=True)
 
 class AsmTransformer(Transformer):
     def start(self, node):
-        return node[0]
+        print(node)
+        return sum(node, [])
     def expr(self, node):
         if node[0].type == "NAME":
             code = []
@@ -34,7 +35,9 @@ class AsmTransformer(Transformer):
 
 asmt = AsmTransformer()
 def asm(text):
-    transformed = asmt.transform(asml.parse(text))
+    parsed = asml.parse(text)
+    #print(parsed)
+    transformed = asmt.transform(parsed)
     #print(transformed)
     return transformed
 
