@@ -1,5 +1,9 @@
 #NAND machine?
 
+def flatten(listoflists):
+	return sum(listoflists, [])
+
+WORDSIZE = 2**16
 
 HEADER, CAPS, CODE, DATA = range(4)
 
@@ -11,9 +15,9 @@ STATUSLEN = 6
 S_NORMAL, S_OOC, S_OOG, S_OOM, S_OOA, S_OOF = range(STATUSLEN)
 SNAMES = "S_NORMAL, S_OOC, S_OOG, S_OOM, S_OOA, S_OOF".split(", ")
 
-NUMINSTR = 7
-I_CREATE, I_ALLOC, I_TRANSFERCAP, I_RECURSE, I_MEMSIZE, I_MEMWRITE, I_MEMCREATE = range(NUMINSTR)
-INAMES = "I_CREATE, I_ALLOC, I_TRANSFERCAP, I_RECURSE, I_MEMSIZE, I_MEMWRITE, I_MEMCREATE".split(", ")
+NUMINSTR = 13
+I_CREATE, I_ALLOC, I_TRANSFERCAP, I_RECURSE, I_MEMSIZE, I_MEMWRITE, I_MEMCREATE, I_ADD, I_SUB, I_JUMP, I_JUMPIF, I_CODEREAD, I_CODELEN = range(NUMINSTR)
+INAMES = "I_CREATE, I_ALLOC, I_TRANSFERCAP, I_RECURSE, I_MEMSIZE, I_MEMWRITE, I_MEMCREATE, I_ADD, I_SUB, I_JUMP, I_JUMPIF, I_CODEREAD, I_CODELEN".split(", ")
 
 ARGLEN = {
 	I_CREATE: 1,
@@ -23,6 +27,12 @@ ARGLEN = {
 	I_MEMSIZE: 1,
 	I_MEMWRITE: 3,
 	I_MEMCREATE: 0,
+	I_ADD: 3,
+	I_SUB: 3,
+	I_JUMP: 1,
+	I_JUMPIF: 3,
+	I_CODEREAD: 3,
+	I_CODELEN: 2,
 }
 
 IGASCOSTS = {
@@ -33,6 +43,12 @@ IGASCOSTS = {
 	I_MEMSIZE: 1,
 	I_MEMWRITE: 2,
 	I_MEMCREATE: 4,
+	I_ADD: 5,
+	I_SUB: 5,
+	I_JUMP: 2,
+	I_JUMPIF: 5,
+	I_CODEREAD: 8,
+	I_CODELEN: 3,#TODO: mind flatten()
 }
 
 IMEMCOSTS = {
@@ -43,6 +59,12 @@ IMEMCOSTS = {
 	I_MEMSIZE: 0,
 	I_MEMWRITE: 0,
 	I_MEMCREATE: 2,
+	I_ADD: 0,
+	I_SUB: 0,
+	I_JUMP: 0,
+	I_JUMPIF: 0,
+	I_CODEREAD: 0,
+	I_CODELEN: 0,
 }
 
 def flat(s):
@@ -63,7 +85,7 @@ def flat(s):
 	return [len(s[HEADER])] + s[HEADER] + caps + [len(s[CODE])] + code + [len(s[DATA])] + data
 
 def sharp(f):
-	print(f)
+	#print(f)
 	index = 0
 	def read():
 		nonlocal index
@@ -149,17 +171,17 @@ def run(code):
 		else:
 			break
 
-	print("CHAIN", chain)
+	#print("CHAIN", chain)
 	#traverse H_REC here?
 
 	STEP = 0
 	while True:
 		STEP += 1
-		print(STEP)
+		#print(STEP)
 		# TODO add jump-back logic to last process in parent chain that has sufficient resources
 
 		if len(chain) == 0:
-			print("END")
+			#print("END")
 			return world
 			#break
 		this = world[chain[-1]]
@@ -214,6 +236,7 @@ def run(code):
 			continue
 
 		if I >= NUMINSTR:
+			print("numinstr")
 			jump_back(S_OOA)#TODO maybe other code here?
 			continue
 
@@ -221,6 +244,7 @@ def run(code):
 		args = C[1:]
 
 		if len(args) != ARGLEN[I]:
+			print("arglen")
 			jump_back(S_OOA, len(chain)-2)
 			continue
 
@@ -271,8 +295,8 @@ def run(code):
 				#TODO set STATUS
 				continue
 			newproc[HEADER] = [S_NORMAL, 0, 0, 0, 0]
-			newproc[CAPS] = set()
-			#print("NEW", newproc)
+			newproc[CAPS] = set()#TODO it's own call cap! (?)
+			print("NEW", newproc)
 			world.append(newproc)
 
 			set_cap(index)
@@ -283,6 +307,7 @@ def run(code):
 				this[DATA][memory] += [0 for i in range(size)]
 			except IndexError:
 				#TODO other code
+				#print("index")
 				jump_back(S_OOA, node_index-1)
 				continue
 
@@ -313,39 +338,65 @@ def run(code):
 				this[DATA][target_index] = len(this[DATA])#must be serialized!
 			except IndexError:
 				jump_back(S_OOA)
+				#print("memsize")
+				continue
 
 		elif I == I_MEMWRITE:
 			memory, address, data = args
 			try:
 				this[DATA][memory][address] = data
 			except IndexError:
+				#print("memwrite")
 				jump_back(S_OOA)
+				continue
 
 		elif I == I_MEMCREATE:
 			this[DATA].append([])
 
-#H_STATUS, H_REC, H_GAS, H_MEM, H_IP
-code = [
-[I_MEMCREATE],
-[I_ALLOC, 0, 10],
-[I_CREATE, 0],
-[I_TRANSFERCAP, 1, 0],
-[I_RECURSE, 1, 100, 100],
-[I_ALLOC, 0, 10],
-]
+		elif I == I_ADD:
+			memory, address1, address2 = args
+			try:
+				this[DATA][memory][address1] = (this[DATA][memory][address1]+this[DATA][memory][address2]) % WORDSIZE
+			except IndexError:
+				jump_back(S_OOA)
+				continue
 
-"""
-[I_MEMWRITE, 0, 0, HEADERLEN],
-[I_MEMWRITE, 0, 1, 0],
-[I_MEMWRITE, 0, 2, 0],
-[I_MEMWRITE, 0, 3, 100],
-[I_MEMWRITE, 0, 4, 100],
-[I_MEMWRITE, 0, 5, 0],
-[I_MEMWRITE, 0, 6, 1],
-[I_MEMWRITE, 0, 7, 1],
-[I_MEMWRITE, 0, 8, 0],
-[I_MEMWRITE, 0, 9, 0],
-"""
+		elif I == I_SUB:
+			memory, address1, address2 = args
+			try:
+				this[DATA][memory][address1] = (this[DATA][memory][address1]-this[DATA][memory][address2]) % WORDSIZE
+			except IndexError:
+				jump_back(S_OOA)
+				continue
+
+		elif I == I_JUMP:
+			target = args[0]
+			this[HEADER][H_IP] = target
+
+		elif I == I_JUMPIF:
+			target, memory, address = args
+			try:
+				if this[DATA][memory][address] > 0:
+					this[HEADER][H_IP] = target
+			except IndexError:
+				jump_back(S_OOF)
+				continue
+
+		elif I == I_CODEREAD:
+			code_index, memory, address = args
+			try:
+				this[DATA][memory][address] = flatten(this[CODE])[code_index]
+			except IndexError:
+				jump_back(S_OOA)
+				continue
+
+		elif I == I_CODELEN:
+			memory, address = args
+			try:
+				this[DATA][memory][address] = len(flatten(this[CODE]))
+			except IndexError:
+				jump_back(S_OOA)
+				continue
 
 import json
 import os
@@ -361,7 +412,8 @@ def visualize(world, startcode):
 	dot.format = "svg"
 
 	def name(index):
-		return "%i [%i|%i]" % (index, world[index][HEADER][H_GAS], world[index][HEADER][H_MEM])
+		header = world[index][HEADER]
+		return "%i [%s|%i|%i|%s|%s]" % (index, SNAMES[header[H_STATUS]], header[H_GAS], header[H_MEM], str(world[index][CODE]), str(world[index][DATA]))
 
 	#TODO highlight active
 	if not isinstance(world[0][0], list):
@@ -374,18 +426,56 @@ def visualize(world, startcode):
 			edges += 1
 			dot.edge(name(pi), name(cap), color="black")
 
-	if edges > 4:
+	print(edges)
+	#if edges > 3:# and len(edges) > len(world)-2:
+	if True:
 		fname = str(int(time()*10000))
 		with open("graphs/"+fname+".txt", "w+") as f:
 			f.write(startcode)
-		dot.render("graphs/"+fname, view=False)
+		dot.render("graphs/"+fname, view=True)
 
 """
-startcode = str(code)
-world = run(code)
-print(code)
-print(SNAMES[world[0][0][0]])
-visualize(world, startcode)
+from random import random, randint, choice
+
+def small():
+	return randint(0,8)
+
+def big():
+	return randint(0,32)
+
+GEN = {
+	I_CREATE: [small],
+	I_ALLOC: [small, big],
+	I_TRANSFERCAP: [small, small],
+	I_RECURSE: [small, big, big],
+	I_MEMSIZE: [small],
+	I_MEMWRITE: [small, big, big],
+	I_MEMCREATE: [],
+	I_ADD: [small, big, big],
+	I_SUB: [small, big, big],
+	I_JUMP: [big],
+	I_JUMPIF: [small, big, big],
+}
+
+def gencode():
+
+	code = []
+
+	for i in range(randint(10,50)):
+		instr = randint(0, NUMINSTR-1)
+		code.append([instr]+[f() for f in GEN[instr]])
+	#print(code)
+	return code
+
+for i in range(10000):
+	code = gencode()
+	startcode = str(code)
+	world = run(code)
+	#print(code)
+	#print(SNAMES[world[0][0][0]])
+	visualize(world, startcode)
+"""
+
 """
 
 def main():
@@ -403,3 +493,39 @@ if __name__ == "__main__":
 	import afl
 	afl.start()
 	main()
+"""
+
+#H_STATUS, H_REC, H_GAS, H_MEM, H_IP
+code = [
+[I_MEMCREATE],
+[I_ALLOC, 0, 15],
+
+[I_MEMWRITE, 0, 0, HEADERLEN],
+[I_MEMWRITE, 0, 1, S_NORMAL],
+[I_MEMWRITE, 0, 2, 0],
+[I_MEMWRITE, 0, 3, 100],
+[I_MEMWRITE, 0, 4, 100],
+[I_MEMWRITE, 0, 5, 0],#ip
+[I_MEMWRITE, 0, 6, 0],#cap
+[I_MEMWRITE, 0, 7, 2],#code
+[I_MEMWRITE, 0, 8, 1],
+[I_MEMWRITE, 0, 9, I_MEMCREATE],
+[I_MEMWRITE, 0, 10, 1+ARGLEN[I_ALLOC]],
+[I_MEMWRITE, 0, 11, I_ALLOC],
+[I_MEMWRITE, 0, 12, 0],
+[I_MEMWRITE, 0, 13, 15],
+[I_MEMWRITE, 0, 14, 0],#data
+
+[I_CREATE, 0],
+[I_TRANSFERCAP, 1, 0],
+
+
+[I_RECURSE, 1, 100, 100],
+[I_ALLOC, 0, 10],
+]
+
+startcode = str(code)
+world = run(code)
+#print(code)
+#print(SNAMES[world[0][0][0]])
+visualize(world, startcode)
