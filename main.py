@@ -20,7 +20,7 @@ def flat(s):
 		data += [len(d)]
 		data += d
 
-	return [len(s[HEADER])] + s[HEADER] + caps + [len(s[CODE])] + code + [len(s[DATA])] + data + [len(s[STACK])] + stack
+	return [len(s[HEADER])] + s[HEADER] + caps + [len(s[CODE])] + code + [len(s[DATA])] + data + [len(s[STACK])] + s[STACK]
 
 def sharp(f):
 	#print(f)
@@ -239,7 +239,7 @@ def run(code):
 			world[node][HEADER][H_MEM] -= memcost
 
 		#debug()
-		print("STEP", STEP, INAMES[I])
+		print("STEP", STEP, INAMES[I], args[0] if args else "None", this[STACK], this[DATA])
 
 		header[H_IP] += 1
 
@@ -273,7 +273,7 @@ def run(code):
 				this[DATA][memory] += [0 for i in range(size)]
 			except IndexError:
 				#TODO other code
-				#print("index")
+				print("index")
 				jump_back(S_OOA, node_index-1)
 				continue
 
@@ -340,19 +340,21 @@ def run(code):
 			this[HEADER][H_IP] = target
 
 		elif I == I_JUMPIF:
-			target, memory, address = pop(3)
+			memory, address, target = pop(3)
 			try:
 				if this[DATA][memory][address] > 0:
 					this[HEADER][H_IP] = target
-			except IndexError:
+			except IndexError as e:
+				print("jumpif", e)
 				jump_back(S_OOF)
 				continue
 
 		elif I == I_CODEREAD:
-			code_index, memory, address = pop(3)
+			memory, address, code_index = pop(3)
 			try:
 				this[DATA][memory][address] = flat(this)[code_index]#flatten(this[CODE])[code_index]
 			except IndexError:
+				print("READ")
 				jump_back(S_OOA)
 				continue
 
@@ -381,16 +383,16 @@ from asm2 import asm
 
 assembler = """
 memcreate
-alloc(9,2)
+alloc(0,2)
 codelen(0,0)
 memwrite(0,1,1)
 
 memcreate
-alloc(mempush(0,1))
+alloc(1, mempush(0,0))
 
 loop:
 sub(0,0,1)
-memwrite(1,mempush(0,0))
+coderead(1,mempush(0,0),mempush(0,0))
 jumpif(0,0,:end)
 jump(:loop)
 
