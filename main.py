@@ -239,6 +239,7 @@ def run(code):
 			world[node][HEADER][H_MEM] -= memcost
 
 		#debug()
+		print("STEP", STEP, INAMES[I])
 
 		header[H_IP] += 1
 
@@ -264,6 +265,7 @@ def run(code):
 			world.append(newproc)
 
 			set_cap(index)
+			this[STACK].append(index)
 
 		elif I == I_ALLOC:
 			memory, size = pop(2)
@@ -365,53 +367,39 @@ def run(code):
 		elif I == I_PUSH:
 			this[STACK].append(args[0])
 
-import json
-import os
-import sys
+		elif I == I_MEMPUSH:
+			memory, address = pop(2)
+			try:
+				this[STACK].append(this[DATA][memory][address])#len(flatten(this[CODE]))
+			except IndexError:
+				jump_back(S_OOA)
+				continue
 
-from time import time
+from visualize import visualize
 
-from graphviz import Digraph
+from asm2 import asm
 
-def visualize(world, startcode):
+assembler = """
+memcreate
+alloc(9,2)
+codelen(0,0)
+memwrite(0,1,1)
 
-	dot = Digraph()
-	dot.format = "svg"
+memcreate
+alloc(mempush(0,1))
 
-	def name(index):
-		header = world[index][HEADER]
-		return "%i [%s|%i|%i|%s|%s]" % (index, SNAMES[header[H_STATUS]], header[H_GAS], header[H_MEM], str(world[index][CODE]), str(world[index][DATA]))
+loop:
+sub(0,0,1)
+memwrite(1,mempush(0,0))
+jumpif(0,0,:end)
+jump(:loop)
 
-	#TODO highlight active
-	if not isinstance(world[0][0], list):
-		print("VIZ NOT SHARP")
-		return
+end:
 
-	edges = 0
-	for pi, proc in enumerate(world):
-		for cap in proc[CAPS]:
-			edges += 1
-			dot.edge(name(pi), name(cap), color="black")
+recurse(sub(create(1), 1),1000,1000)
 
-	print(edges)
-	#if edges > 3:# and len(edges) > len(world)-2:
-	if True:
-		fname = str(int(time()*10000))
-		with open("graphs/"+fname+".txt", "w+") as f:
-			f.write(startcode)
-		dot.render("graphs/"+fname, view=False)
-
-from asmutils import asm
-from assembler import assemble
-
-treecode = """
-jump(0)
-jump(0)
-"""
-print(treecode)
-assembler = "\n".join(asm(treecode))
-print(assembler)
-binary = assemble(assembler)
+"""# ; should this push the index?
+binary = asm(assembler)
 print(binary)
 
 if __name__ == "__main__":
