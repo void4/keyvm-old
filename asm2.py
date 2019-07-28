@@ -19,7 +19,7 @@ asml = Lark(asmgrammar, debug=True)
 
 class AsmTransformer(Transformer):
     def start(self, node):
-        print(node)
+        #print(node)
         return sum([n if isinstance(n, list) else [n.value] for n in node], [])
     def comment(self, node):
         return []
@@ -56,11 +56,11 @@ def assemble(code):
         else:
             instrcounter += 1
             wordcounter += 1
-        print(instrcounter, instr)
+        #print(instrcounter, instr)
 
-    print(labels)
+    #print(labels)
     binary = []
-    print("CODE", code, type(code))
+    #print("CODE", code, type(code))
     for i, instr in enumerate(code):
         if instr.endswith(":"):
             pass
@@ -68,7 +68,7 @@ def assemble(code):
             binary.append([I_PUSH, labels[instr.split(":")[-1]]])
         else:
             instr = instr.split()
-            print(instr)
+            #print(instr)
             try:
                 opcode = eval("I_"+instr[0])
                 binary.append([opcode]+list([eval(n) for n in instr[1:]]))
@@ -80,7 +80,7 @@ def assemble(code):
 asmt = AsmTransformer()
 def asm(text):
     parsed = asml.parse(text)
-    print(parsed)
+    #print(parsed)
     transformed = asmt.transform(parsed)
     #print(transformed)
 

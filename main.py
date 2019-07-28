@@ -117,11 +117,14 @@ def run(code, gas, mem):
 		else:
 			break
 
+
+
 	#print("CHAIN", chain)
 	#traverse H_REC here?
 
 	STEP = 0
 	while True:
+		print(STEP, [world[node][HEADER][H_GAS] for node in chain])
 		STEP += 1
 		#print(STEP)
 		# TODO add jump-back logic to last process in parent chain that has sufficient resources
@@ -156,9 +159,7 @@ def run(code, gas, mem):
 				#world[active] = flat(world[active])
 				chain = chain[:-1]
 			else:
-				for i in range(len(world)-1, to, -1):
-					#world[i] = flat(world[i])
-					chain = chain[:-1]
+				chain = chain[:to+1]
 
 		def set_cap(target):
 			caps.add(target)
@@ -199,7 +200,7 @@ def run(code, gas, mem):
 
 		if (I not in IMMEDIATE and len(args) != 0) or (I in IMMEDIATE and len(args) != IMMEDIATE[I]):
 			print("arglen")
-			jump_back(S_OOA, len(chain)-2)
+			jump_back(S_OOA)
 			continue
 		#print("STACK", this[STACK])
 		if len(stack) < ARGLEN[I]:
@@ -224,13 +225,13 @@ def run(code, gas, mem):
 				#TODO this is too heavy
 				print("noval")
 				jump_back(S_OOF, node_index-1)
-				break
+				continue
 			if node_header[H_GAS] < gascost:
 				jump_back(S_OOG, node_index-1)
-				break
+				continue
 			if node_header[H_MEM] < memcost:
 				jump_back(S_OOM, node_index-1)
-				break
+				continue
 
 
 		if JB:
@@ -265,7 +266,7 @@ def run(code, gas, mem):
 			#try:
 			#	print(len(this[DATA]), memory)
 			#	print(this[DATA][memory])
-			print(this[DATA][memory])
+			#print(this[DATA][memory])
 			newproc = sharp(this[DATA][memory])
 			#except IndexError as e:
 				#TODO set STATUS
@@ -274,7 +275,7 @@ def run(code, gas, mem):
 			#	continue
 			newproc[HEADER] = [S_NORMAL, 0, 0, 0, 0]
 			newproc[CAPS] = set()#TODO it's own call cap! (?)
-			print("NEW", newproc)
+			#print("NEW", newproc)
 			world.append(newproc)
 
 			set_cap(index)
@@ -313,7 +314,7 @@ def run(code, gas, mem):
 				header[H_STATUS] = S_REC
 				active = target
 				# TODO recurse down if subprocess has S/H_REC, because refuel?
-				# or further up? 
+				# or further up?
 				chain.append(target)
 
 		elif I == I_MEMSIZE:
@@ -395,9 +396,9 @@ def run(code, gas, mem):
 			from copy import deepcopy
 			newproc = deepcopy(this)
 
-			newproc[HEADER] = [S_NORMAL, 0, 0, 0, 0]
+			newproc[HEADER] = [S_NORMAL, len(world), 0, 0, 0]
 			newproc[CAPS] = set()#TODO it's own call cap! (?)
-			print("NEW", newproc)
+			#print("NEW", newproc)
 			world.append(newproc)
 
 			set_cap(index)
@@ -422,17 +423,17 @@ from asm2 import asm
 #codelen(0,0)
 assembler = """
 recurse(fork(), div(mempush(0,2), 3), div(mempush(0,3), 3))
-recurse(fork(), div(mempush(0,2), 3), div(mempush(0,3), 3))
+recurse(fork(), div(mempush(0,2), 2), div(mempush(0,3), 2))
 """
 
 binary = asm(assembler)
-print(binary)
-print("LEN", len(binary))
+#print(binary)
+#print("LEN", len(binary))
 
 if __name__ == "__main__":
 	startcode = str(binary)
-	world = run(binary, 1000, 1000)
+	world = run(binary, 3000, 3000)
 	#print(code)
-	print(world)
+	#print(world)
 	print(SNAMES[world[0][0][0]])
 	visualize(world, startcode)

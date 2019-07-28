@@ -65,6 +65,9 @@ IGASCOSTS = {
 	I_FORK: 40,
 }
 
+for k in IGASCOSTS:
+	IGASCOSTS[k] = 1
+
 # TODO: cost -= arglen
 IMEMCOSTS = {
 	I_HALT: 0,
@@ -88,3 +91,7 @@ IMEMCOSTS = {
 	I_MEMPUSH: 0,
 	I_FORK: 0,#TODO
 }
+
+
+for k in IMEMCOSTS:
+	IMEMCOSTS[k] = 1
