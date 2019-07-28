@@ -7,9 +7,10 @@ HEADER, CAPS, CODE, DATA, STACK = range(5)
 HEADERLEN = 5
 H_STATUS, H_REC, H_GAS, H_MEM, H_IP = range(HEADERLEN)
 
-STATUSLEN = 9
-S_NORMAL, S_HLT, S_RET, S_OOC, S_OOG, S_OOM, S_OOA, S_OOF, S_OOS = range(STATUSLEN)
-SNAMES = "S_NORMAL, S_HLT, S_RET, S_OOC, S_OOG, S_OOM, S_OOA, S_OOF, S_OOS".split(", ")
+STATUSLEN = 10
+S_NORMAL, S_HLT, S_RET, S_OOC, S_OOG, S_OOM, S_OOA, S_OOF, S_OOS, S_OOB = range(STATUSLEN)
+SNAMES = "S_NORMAL, S_HLT, S_RET, S_OOC, S_OOG, S_OOM, S_OOA, S_OOF, S_OOS, S_OOB".split(", ")
+#normal, halt, return, out of code, out of gas, out of memory, out of arguments, out of form?, out of stack, out of bounds
 
 NUMINSTR = 18
 I_HALT, I_RETURN, I_CREATE, I_ALLOC, I_TRANSFERKEY, I_RECURSE, I_MEMSIZE, I_MEMWRITE, I_MEMCREATE, I_ADD, I_SUB, I_JUMP, I_JUMPIF, I_CODEREAD, I_CODELEN, I_PUSH, I_MEMPUSH, I_FORK = range(NUMINSTR)

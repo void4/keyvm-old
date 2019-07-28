@@ -146,6 +146,7 @@ def run(code):
 
 		JB = False
 
+		# use raise here?
 		def jump_back(condition, to=None):
 			nonlocal chain, JB
 			JB = True
@@ -255,6 +256,8 @@ def run(code):
 		def pop1():
 			return stack.pop(-1)
 
+		# TODO derive docs from scanning functions?
+
 		if I == I_CREATE:
 			memory = pop1()
 			index = len(world)
@@ -331,7 +334,7 @@ def run(code):
 		elif I == I_MEMCREATE:
 			this[DATA].append([])
 
-		elif I == I_ADD:#derive docs from scanning functions?
+		elif I == I_ADD:
 			arg1, arg2 = pop(2)
 			push((arg1 + arg2) % WORDSIZE)
 
@@ -366,20 +369,15 @@ def run(code):
 			try:
 				push(this[DATA][memory][address])#len(flatten(this[CODE]))
 			except IndexError:
-				jump_back(S_OOA)
+				jump_back(S_OOB)
 				continue
 		elif I == I_FORK:
 			#memory = pop1()
 			index = len(world)
 
-			#try
 			from copy import deepcopy
 			newproc = deepcopy(this)
-			#except IndexError as e:
-				#TODO set STATUS
-			#	print("FAILCREATE", e)
-			#	jump_back(S_OOF)
-			#	continue
+
 			newproc[HEADER] = [S_NORMAL, 0, 0, 0, 0]
 			newproc[CAPS] = set()#TODO it's own call cap! (?)
 			print("NEW", newproc)
