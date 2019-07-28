@@ -421,6 +421,14 @@ def run(code, gas, mem):
 			jump_back(S_RET)
 			continue
 
+		elif I == I_RANDOM:
+			mi, ma = pop(2)
+			from random import randint
+			push(randint(mi, ma))
+
+		elif I == I_NUMCAPS:
+			push(len(this[CAPS]))
+
 
 		if not JUMP:
 			header[H_IP] += 1
@@ -435,7 +443,8 @@ memcreate
 alloc(0,2)
 memwrite(0,0,fork())
 memwrite(0,1,fork())
-transferkey(1, 0)
+transferkey(1, random(0, numcaps()))
+transferkey(2, random(0, numcaps()))
 recurse(mempush(2,0), div(mempush(0,2), 3), div(mempush(0,3), 3))
 recurse(mempush(2,1), div(mempush(0,2), 2), div(mempush(0,3), 2))
 """
