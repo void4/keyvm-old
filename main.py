@@ -73,7 +73,7 @@ def pretty(p):
 # does it always jump back to the minimum of all header resources?
 
 def validate(sharp):
-	firstlevel = isinstance(sharp, list) and isinstance(sharp[HEADER], list) and isinstance(sharp[CAPS], set)
+	firstlevel = isinstance(sharp, list) and isinstance(sharp[HEADER], list) and isinstance(sharp[CAPS], list)
 	if not firstlevel:
 		print("first")
 		return False
@@ -93,7 +93,7 @@ def validate(sharp):
 
 def run(code, gas, mem):
 	#TODO: make CAPS dict? other data structure?
-	process = [[S_NORMAL,0,gas,mem,0], {0}, code, [], []]
+	process = [[S_NORMAL,0,gas,mem,0], [0], code, [], []]
 
 	if not validate(process):
 		print("INTRO VALIDATE FAIL")
@@ -124,7 +124,7 @@ def run(code, gas, mem):
 
 	STEP = 0
 	while True:
-		print(STEP, [world[node][HEADER][H_GAS] for node in chain])
+		#print(STEP, [world[node][HEADER][H_GAS] for node in chain])
 		STEP += 1
 		#print(STEP)
 		# TODO add jump-back logic to last process in parent chain that has sufficient resources
@@ -161,15 +161,15 @@ def run(code, gas, mem):
 			else:
 				chain = chain[:to+1]
 
+		def get_cap(index):
+			return caps[index]
+
 		def set_cap(target):
-			caps.add(target)
+			caps.append(target)
 
 		def has_cap(target):
-			return target in caps
-
-		def transfer_cap(index, table):
-			if index in caps:
-				table.add(index)
+			#return target in caps
+			return target < len(caps)
 
 		ip = header[H_IP]
 		if ip >= len(code):#could also wrap around for shits and giggles
@@ -243,12 +243,16 @@ def run(code, gas, mem):
 			world[node][HEADER][H_MEM] -= memcost
 
 		#debug()
-		#print(len(chain), "> STEP", STEP, "#%s" % header[H_IP], INAMES[I], args[0] if args else "None", this[STACK])#, this[DATA])
+		print(len(chain), "> STEP", STEP, "#%s" % header[H_IP], INAMES[I], args[0] if args else "None", this[STACK])#, this[DATA])
 
 		JUMP = False
 
 		def push(x):
 			this[STACK].append(x)
+
+		def peek():
+			"""Depends on checking ARGLEN correctly"""
+			return this[STACK][-1]
 
 		def pop(n=1):
 			args = [stack.pop(-1) for i in range(n)]
@@ -274,7 +278,7 @@ def run(code, gas, mem):
 			#	jump_back(S_OOF)
 			#	continue
 			newproc[HEADER] = [S_NORMAL, 0, 0, 0, 0]
-			newproc[CAPS] = set()#TODO it's own call cap! (?)
+			newproc[CAPS] = []#TODO it's own call cap! (?)
 			#print("NEW", newproc)
 			world.append(newproc)
 
@@ -292,19 +296,21 @@ def run(code, gas, mem):
 				continue
 
 		elif I == I_TRANSFERKEY:
+			"""Should probably be renamed, because it rather "copies" the key"""
 			# TODO can only transfer 1 cap per call
 			# only relative indices?
 			# how do you say "do you have cap for x" otherwise?
-			target, cap = pop(2)
+			targetcapindex, transfercapindex = pop(2)
 
-			if has_cap(target):
-				target_caps = world[target][CAPS]
-				transfer_cap(cap, target_caps)
+			if has_cap(targetcapindex) and has_cap(transfercapindex):
+				world[this[CAPS][targetcapindex]][CAPS].append(this[CAPS][transfercapindex])
 
 		elif I == I_RECURSE:
-			target, gas, mem = pop(3)
+			capindex, gas, mem = pop(3)
 
-			if has_cap(target):
+			if has_cap(capindex):
+
+				target = this[CAPS][capindex]
 
 				target_header = world[target][HEADER]
 				target_header[H_GAS] = min(header[H_GAS], gas)
@@ -312,7 +318,7 @@ def run(code, gas, mem):
 
 				header[H_REC] = target
 				header[H_STATUS] = S_REC
-				active = target
+				#active = target
 				# TODO recurse down if subprocess has S/H_REC, because refuel?
 				# or further up?
 				chain.append(target)
@@ -376,6 +382,9 @@ def run(code, gas, mem):
 		elif I == I_PUSH:
 			push(args[0])
 
+		elif I == I_DUP:
+			push(peek())
+
 		elif I == I_MEMPUSH:
 			memory, address = pop(2)
 			try:
@@ -397,12 +406,12 @@ def run(code, gas, mem):
 			newproc = deepcopy(this)
 
 			newproc[HEADER] = [S_NORMAL, len(world), 0, 0, 0]
-			newproc[CAPS] = set()#TODO it's own call cap! (?)
+			newproc[CAPS] = []#TODO it's own call cap! (?)
 			#print("NEW", newproc)
 			world.append(newproc)
 
 			set_cap(index)
-			this[STACK].append(index)
+			this[STACK].append(len(this[CAPS])-1)
 
 		elif I == I_HALT:
 			jump_back(S_HLT)
@@ -422,8 +431,13 @@ from asm2 import asm
 
 #codelen(0,0)
 assembler = """
-recurse(fork(), div(mempush(0,2), 3), div(mempush(0,3), 3))
-recurse(fork(), div(mempush(0,2), 2), div(mempush(0,3), 2))
+memcreate
+alloc(0,2)
+memwrite(0,0,fork())
+memwrite(0,1,fork())
+transferkey(1, 0)
+recurse(mempush(2,0), div(mempush(0,2), 3), div(mempush(0,3), 3))
+recurse(mempush(2,1), div(mempush(0,2), 2), div(mempush(0,3), 2))
 """
 
 binary = asm(assembler)
@@ -432,7 +446,7 @@ binary = asm(assembler)
 
 if __name__ == "__main__":
 	startcode = str(binary)
-	world = run(binary, 3000, 3000)
+	world = run(binary, 10000, 10000)
 	#print(code)
 	#print(world)
 	print(SNAMES[world[0][0][0]])
