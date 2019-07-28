@@ -11,7 +11,9 @@ def visualize(world, startcode):
 
 	def name(index):
 		header = world[index][HEADER]
-		return "%i [%s|%i|%i|%s|%s]" % (index, SNAMES[header[H_STATUS]], header[H_GAS], header[H_MEM], str(world[index][CODE]), str(world[index][DATA]))
+		#return "%i [%s|%i|%i|%s|%s]" % (index, SNAMES[header[H_STATUS]], header[H_GAS], header[H_MEM], str(world[index][CODE]), str(world[index][DATA]))
+		return "%i [%s|%i|%i]" % (index, SNAMES[header[H_STATUS]], header[H_GAS], header[H_MEM])
+
 
 	#TODO highlight active
 	if not isinstance(world[0][0], list):

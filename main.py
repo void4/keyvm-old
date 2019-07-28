@@ -91,9 +91,9 @@ def validate(sharp):
 
 	return True
 
-def run(code):
+def run(code, gas, mem):
 	#TODO: make CAPS dict? other data structure?
-	process = [[S_NORMAL,0,10000,10000,0], {0}, code, [], []]
+	process = [[S_NORMAL,0,gas,mem,0], {0}, code, [], []]
 
 	if not validate(process):
 		print("INTRO VALIDATE FAIL")
@@ -310,7 +310,10 @@ def run(code):
 				target_header[H_MEM] = min(header[H_MEM], mem)
 
 				header[H_REC] = target
+				header[H_STATUS] = S_REC
 				active = target
+				# TODO recurse down if subprocess has S/H_REC, because refuel?
+				# or further up? 
 				chain.append(target)
 
 		elif I == I_MEMSIZE:
@@ -342,6 +345,14 @@ def run(code):
 			arg1, arg2 = pop(2)
 			push((arg1 - arg2) % WORDSIZE)
 
+		elif I == I_MUL:
+			arg1, arg2 = pop(2)
+			push((arg1 * arg2) % WORDSIZE)
+
+		elif I == I_DIV:
+			arg1, arg2 = pop(2)
+			push((arg1 // arg2) % WORDSIZE)
+
 		elif I == I_JUMP:
 			target = pop1()
 			this[HEADER][H_IP] = target
@@ -367,7 +378,13 @@ def run(code):
 		elif I == I_MEMPUSH:
 			memory, address = pop(2)
 			try:
-				push(this[DATA][memory][address])#len(flatten(this[CODE]))
+
+				if memory == 0:
+					push(this[HEADER][address])
+				elif memory == 1:
+					push(this[CODE][address])
+				else:
+					push(this[DATA][memory-2][address])#len(flatten(this[CODE]))
 			except IndexError:
 				jump_back(S_OOB)
 				continue
@@ -404,7 +421,8 @@ from asm2 import asm
 
 #codelen(0,0)
 assembler = """
-recurse(fork(), 1000, 1000)
+recurse(fork(), div(mempush(0,2), 3), div(mempush(0,3), 3))
+recurse(fork(), div(mempush(0,2), 3), div(mempush(0,3), 3))
 """
 
 binary = asm(assembler)
@@ -413,7 +431,7 @@ print("LEN", len(binary))
 
 if __name__ == "__main__":
 	startcode = str(binary)
-	world = run(binary)
+	world = run(binary, 1000, 1000)
 	#print(code)
 	print(world)
 	print(SNAMES[world[0][0][0]])
