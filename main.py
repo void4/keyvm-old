@@ -214,7 +214,7 @@ def run(code):
 		if memcost is None:
 			if I == I_ALLOC:
 				memcost = stack[-1]#size arg for ALLOC
-			elif I == I_TRANSFERCAP:
+			elif I == I_TRANSFERKEY:
 				memcost = 1
 
 		for node_index, node in enumerate(chain):
@@ -244,6 +244,9 @@ def run(code):
 		#print(len(chain), "> STEP", STEP, "#%s" % header[H_IP], INAMES[I], args[0] if args else "None", this[STACK])#, this[DATA])
 
 		JUMP = False
+
+		def push(x):
+			this[STACK].append(x)
 
 		def pop(n=1):
 			args = [stack.pop(-1) for i in range(n)]
@@ -284,8 +287,10 @@ def run(code):
 				jump_back(S_OOA, node_index-1)
 				continue
 
-		elif I == I_TRANSFERCAP:
+		elif I == I_TRANSFERKEY:
 			# TODO can only transfer 1 cap per call
+			# only relative indices?
+			# how do you say "do you have cap for x" otherwise?
 			target, cap = pop(2)
 
 			if has_cap(target):
@@ -326,21 +331,13 @@ def run(code):
 		elif I == I_MEMCREATE:
 			this[DATA].append([])
 
-		elif I == I_ADD:
-			memory, address1, address2 = pop(3)
-			try:
-				this[DATA][memory][address1] = (this[DATA][memory][address1]+this[DATA][memory][address2]) % WORDSIZE
-			except IndexError:
-				jump_back(S_OOA)
-				continue
+		elif I == I_ADD:#derive docs from scanning functions?
+			arg1, arg2 = pop(2)
+			push((arg1 + arg2) % WORDSIZE)
 
 		elif I == I_SUB:
-			memory, address1, address2 = pop(3)
-			try:
-				this[DATA][memory][address1] = (this[DATA][memory][address1]-this[DATA][memory][address2]) % WORDSIZE
-			except IndexError:
-				jump_back(S_OOA)
-				continue
+			arg1, arg2 = pop(2)
+			push((arg1 - arg2) % WORDSIZE)
 
 		elif I == I_JUMP:
 			target = pop1()
@@ -348,44 +345,30 @@ def run(code):
 			JUMP = True
 
 		elif I == I_JUMPIF:
-			memory, address, target	 = pop(3)
-			try:
-				if this[DATA][memory][address] > 0:
-					this[HEADER][H_IP] = target
-					JUMP = True
-			except IndexError as e:
-				print("jumpif", e)
-				jump_back(S_OOF)
-				continue
+			condition, target = pop(2)
+			if condition > 0:
+				this[HEADER][H_IP] = target
+				JUMP = True
 
 		elif I == I_CODEREAD:
-			memory, address, code_index = pop(3)
-			try:
-				this[DATA][memory][address] = flat(this)[code_index]#flatten(this[CODE])[code_index]
-			except IndexError:
-				print("READ")
-				jump_back(S_OOA)
-				continue
+			code_index = pop(1)
+			push(flat(this)[code_index])
+			#flatten(this[CODE])[code_index]
 
 		elif I == I_CODELEN:
-			memory, address = pop(2)
-			try:
-				this[DATA][memory][address] = len(flat(this))#len(flatten(this[CODE]))
-			except IndexError:
-				jump_back(S_OOA)
-				continue
+			push(len(flat(this)))#len(flatten(this[CODE]))
 
 		elif I == I_PUSH:
-			this[STACK].append(args[0])
+			push(args[0])
 
 		elif I == I_MEMPUSH:
 			memory, address = pop(2)
 			try:
-				this[STACK].append(this[DATA][memory][address])#len(flatten(this[CODE]))
+				push(this[DATA][memory][address])#len(flatten(this[CODE]))
 			except IndexError:
 				jump_back(S_OOA)
 				continue
-		if I == I_FORK:
+		elif I == I_FORK:
 			#memory = pop1()
 			index = len(world)
 
@@ -404,6 +387,14 @@ def run(code):
 
 			set_cap(index)
 			this[STACK].append(index)
+
+		elif I == I_HALT:
+			jump_back(S_HLT)
+			continue
+
+		elif I == I_RETURN:
+			jump_back(S_RET)
+			continue
 
 
 		if not JUMP:
