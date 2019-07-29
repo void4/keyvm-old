@@ -202,16 +202,18 @@ def run(code, gas, mem):
 			jump_back(S_OOA)
 			continue
 
-		if len(stack) < ARGLEN[I]:
-			print("ARGLEN", "Stacklen:", len(this[STACK]), "Arglen:", ARGLEN[I], INAMES[I])
+		req = REQUIREMENTS[I]
+
+		if len(stack) < req[R_ARG]:
+			print("ARGLEN", "Stacklen:", len(this[STACK]), "Arglen:", req[R_ARG], INAMES[I])
 			jump_back(S_OOS)
 			continue
 
-		gascost = IGASCOSTS[I]
+		gascost = req[R_GAS]
 		if gascost is None:
 			gascost = stack[-1]#size arg for ALLOC
 
-		memcost = IMEMCOSTS[I]
+		memcost = req[R_MEM]
 		if memcost is None:
 			if I == I_ALLOC:
 				memcost = stack[-1]#size arg for ALLOC
