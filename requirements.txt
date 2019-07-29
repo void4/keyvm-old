@@ -1,2 +1,3 @@
 python-afl
 lark-parser
+graphviz
