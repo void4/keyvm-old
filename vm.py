@@ -1,11 +1,7 @@
-#NAND machine?
-
-def flatten(listoflists):
-	return sum(listoflists, [])
-
 from instructions import *
 
 def flat(s):
+	"""Convert process into flat list of words representation"""
 	# TODO refactor this to have all the length in the front, like in ye olden times
 	# This makes checking for mutability easier
 	caps = [len(s[CAPS])] + list(s[CAPS])
@@ -23,7 +19,7 @@ def flat(s):
 	return [len(s[HEADER])] + s[HEADER] + caps + [len(s[CODE])] + code + [len(s[DATA])] + data + [len(s[STACK])] + s[STACK]
 
 def sharp(f):
-	#print(f)
+	"""Convert flat representation to hierarchical representation"""
 	index = 0
 	def read():
 		nonlocal index
@@ -54,6 +50,7 @@ def sharp(f):
 	return s
 
 def pretty(p):
+	"""Pretty-print a process"""
 	if isinstance(p[0], list):
 		p = flat(p)
 	#print(p)
@@ -68,11 +65,8 @@ def pretty(p):
 	body = str(p[DATA])# str(p[CODE]) +
 	return head + "\n" + body
 
-#allow for reduction of caps?
-
-# does it always jump back to the minimum of all header resources?
-
 def validate(sharp):
+	"""Validate a sharp process"""
 	firstlevel = isinstance(sharp, list) and isinstance(sharp[HEADER], list) and isinstance(sharp[CAPS], list)
 	if not firstlevel:
 		print("first")
@@ -92,7 +86,8 @@ def validate(sharp):
 	return True
 
 def run(code, gas, mem):
-	#TODO: make CAPS dict? other data structure?
+	"""Create a new process with code and run it with gas and memory resource restrictions"""
+
 	process = [[S_NORMAL,0,gas,mem,0], [0], code, [], []]
 
 	if not validate(process):
@@ -117,10 +112,9 @@ def run(code, gas, mem):
 		else:
 			break
 
-
-
 	#print("CHAIN", chain)
 	#traverse H_REC here?
+	# TODO refuel jump
 
 	STEP = 0
 	while True:
@@ -191,7 +185,6 @@ def run(code, gas, mem):
 			jump_back(S_OOA)#TODO maybe other code here?
 			continue
 
-		#TODO check length
 		args = C[1:]
 
 		IMMEDIATE = {
@@ -202,7 +195,7 @@ def run(code, gas, mem):
 			print("arglen")
 			jump_back(S_OOA)
 			continue
-		#print("STACK", this[STACK])
+
 		if len(stack) < ARGLEN[I]:
 			print("ARGLEN", "Stacklen:", len(this[STACK]), "Arglen:", ARGLEN[I], INAMES[I])
 			jump_back(S_OOS)

@@ -42,3 +42,5 @@ btw, NAND makes copying values have 2x overhead if memory not initialized with -
 
 cap semantics on creation
 should it be able to read/write/call itself immediately?
+
+allow for reduction of caps?
