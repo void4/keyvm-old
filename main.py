@@ -9,8 +9,8 @@ memcreate
 alloc(0,2)
 memwrite(0,0,fork())
 memwrite(0,1,fork())
-transferkey(1, random(0, numcaps()))
-transferkey(2, random(0, numcaps()))
+transferkey(1, random(0, numkeys()))
+transferkey(2, random(0, numkeys()))
 recurse(mempush(2,0), div(mempush(0,2), 3), div(mempush(0,3), 3))
 recurse(mempush(2,1), div(mempush(0,2), 2), div(mempush(0,3), 2))
 """

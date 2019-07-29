@@ -44,3 +44,9 @@ cap semantics on creation
 should it be able to read/write/call itself immediately?
 
 allow for reduction of caps?
+
+could also wrap around IP % len(code) for shits and giggles
+
+TODO can only transfer 1 cap per call
+only relative indices?
+how do you say "do you have cap for x" otherwise?

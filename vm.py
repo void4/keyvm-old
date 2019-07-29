@@ -4,7 +4,7 @@ def flat(s):
 	"""Convert process into flat list of words representation"""
 	# TODO refactor this to have all the length in the front, like in ye olden times
 	# This makes checking for mutability easier
-	caps = [len(s[CAPS])] + list(s[CAPS])
+	keys = [len(s[KEYS])] + list(s[KEYS])
 
 	code = []
 	for instruction in s[CODE]:
@@ -16,7 +16,7 @@ def flat(s):
 		data += [len(d)]
 		data += d
 
-	return [len(s[HEADER])] + s[HEADER] + caps + [len(s[CODE])] + code + [len(s[DATA])] + data + [len(s[STACK])] + s[STACK]
+	return [len(s[HEADER])] + s[HEADER] + keys + [len(s[CODE])] + code + [len(s[DATA])] + data + [len(s[STACK])] + s[STACK]
 
 def sharp(f):
 	"""Convert flat representation to hierarchical representation"""
@@ -31,7 +31,7 @@ def sharp(f):
 	header = [read() for i in range(l)]
 
 	l = read()
-	caps = set([read() for u in range(l)])
+	keys = set([read() for u in range(l)])
 
 	l = read()
 	code = [[read() for j in range(read())] for i in range(l)]
@@ -45,7 +45,7 @@ def sharp(f):
 	l = read()
 	stack = [read() for i in range(l)]
 
-	s = [header, caps, code, data, stack]
+	s = [header, keys, code, data, stack]
 	#print("RET", s)
 	return s
 
@@ -57,17 +57,17 @@ def pretty(p):
 	if not isinstance(p[0], list):
 		p = sharp(p)
 	h = p[HEADER]
-	c = p[CAPS]
+	c = p[KEYS]
 	numbers = [str(h[i]) for i in [H_REC, H_GAS, H_MEM, H_IP]]
-	caps = [str(c)]
-	head = "\t".join(numbers+caps)
+	keys = [str(c)]
+	head = "\t".join(numbers+keys)
 
 	body = str(p[DATA])# str(p[CODE]) +
 	return head + "\n" + body
 
 def validate(sharp):
 	"""Validate a sharp process"""
-	firstlevel = isinstance(sharp, list) and isinstance(sharp[HEADER], list) and isinstance(sharp[CAPS], list)
+	firstlevel = isinstance(sharp, list) and isinstance(sharp[HEADER], list) and isinstance(sharp[KEYS], list)
 	if not firstlevel:
 		print("first")
 		return False
@@ -104,16 +104,10 @@ def run(code, gas, mem):
 	start = 0
 	chain = [start]
 
-	#print("CHAIN", chain)
-	#traverse H_REC here?
-	# TODO refuel jump
-
 	STEP = 0
 	while True:
 		#print(STEP, [world[node][HEADER][H_GAS] for node in chain])
 		STEP += 1
-		#print(STEP)
-		# TODO add jump-back logic to last process in parent chain that has sufficient resources
 
 		if len(chain) == 0:
 			#print("END")
@@ -137,10 +131,8 @@ def run(code, gas, mem):
 			#continue
 		#	os._exit(1)
 
-		#TODO: only deserialize here, on demand
-
 		header = this[HEADER]
-		caps = this[CAPS]
+		keys = this[KEYS]
 		code = this[CODE]
 		stack = this[STACK]
 
@@ -161,23 +153,22 @@ def run(code, gas, mem):
 			if len(chain) > 0:
 				world[chain[-1]][HEADER][H_REC] = chain[-1]
 
-		def get_cap(index):
-			return caps[index]
+		def get_key(index):
+			return keys[index]
 
-		def set_cap(target):
-			caps.append(target)
+		def set_key(target):
+			keys.append(target)
 
-		def has_cap(target):
-			#return target in caps
-			return target < len(caps)
+		def has_key(target):
+			#return target in keys
+			return target < len(keys)
 
 		ip = header[H_IP]
-		if ip >= len(code):#could also wrap around for shits and giggles
+		if ip >= len(code):
 			print("lencode")
 			jump_back(S_OOC)
 			continue
 
-		#print(ip, len(code))
 		try:
 			C = code[ip]
 			I = C[0]
@@ -249,22 +240,27 @@ def run(code, gas, mem):
 		JUMP = False
 
 		def push(x):
+			"""Push a word on the stack"""
 			this[STACK].append(x)
 
 		def peek():
-			"""Depends on checking ARGLEN correctly"""
+			"""Retrieve (but do not pop) the topmost word of the stack
+			Depends on checking ARGLEN correctly"""
 			return this[STACK][-1]
 
 		def pop(n=1):
+			"""Pop the <n> topmost words from the stack"""
 			args = [stack.pop(-1) for i in range(n)]
 			return args[::-1]
 
 		def pop1():
+			"""Pop the topmost word from the stack"""
 			return stack.pop(-1)
 
 		# TODO derive docs from scanning functions?
 
 		if I == I_CREATE:
+			"""Create a new process from the given <memory>"""
 			memory = pop1()
 			index = len(world)
 
@@ -279,14 +275,15 @@ def run(code, gas, mem):
 			#	jump_back(S_OOF)
 			#	continue
 			newproc[HEADER] = [S_NORMAL, 0, 0, 0, 0]
-			newproc[CAPS] = []#TODO it's own call cap! (?)
+			newproc[KEYS] = []#TODO it's own call key! (?)
 			#print("NEW", newproc)
 			world.append(newproc)
 
-			set_cap(index)
+			set_key(index)
 			this[STACK].append(index)
 
 		elif I == I_ALLOC:
+			"""Allocate <size> words at the end of <memory>"""
 			memory, size = pop(2)
 			try:
 				this[DATA][memory] += [0 for i in range(size)]
@@ -297,21 +294,19 @@ def run(code, gas, mem):
 				continue
 
 		elif I == I_TRANSFERKEY:
-			"""Should probably be renamed, because it rather "copies" the key"""
-			# TODO can only transfer 1 cap per call
-			# only relative indices?
-			# how do you say "do you have cap for x" otherwise?
-			targetcapindex, transfercapindex = pop(2)
+			"""Transfer the key <transferkeyindex> to the process pointed to by <targetkeyindex>
+			Should probably be renamed, because it rather "copies" the key"""
+			targetkeyindex, transferkeyindex = pop(2)
 
-			if has_cap(targetcapindex) and has_cap(transfercapindex):
-				world[this[CAPS][targetcapindex]][CAPS].append(this[CAPS][transfercapindex])
+			if has_key(targetkeyindex) and has_key(transferkeyindex):
+				world[this[KEYS][targetkeyindex]][KEYS].append(this[KEYS][transferkeyindex])
 
 		elif I == I_RECURSE:
-			capindex, gas, mem = pop(3)
+			keyindex, gas, mem = pop(3)
 
-			if has_cap(capindex):
+			if has_key(keyindex):
 
-				target = this[CAPS][capindex]
+				target = this[KEYS][keyindex]
 
 				target_header = world[target][HEADER]
 				target_header[H_GAS] = min(header[H_GAS], gas)
@@ -407,12 +402,12 @@ def run(code, gas, mem):
 			newproc = deepcopy(this)
 
 			newproc[HEADER] = [S_NORMAL, len(world), 0, 0, 0]
-			newproc[CAPS] = []#TODO it's own call cap! (?)
+			newproc[KEYS] = []#TODO it's own call key! (?)
 			#print("NEW", newproc)
 			world.append(newproc)
 
-			set_cap(index)
-			this[STACK].append(len(this[CAPS])-1)
+			set_key(index)
+			this[STACK].append(len(this[KEYS])-1)
 
 		elif I == I_HALT:
 			jump_back(S_HLT)
@@ -427,8 +422,8 @@ def run(code, gas, mem):
 			from random import randint
 			push(randint(mi, ma))
 
-		elif I == I_NUMCAPS:
-			push(len(this[CAPS]))
+		elif I == I_NUMKEYS:
+			push(len(this[KEYS]))
 
 
 		if not JUMP:

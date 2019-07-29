@@ -22,9 +22,9 @@ def visualize(world, startcode):
 
 	edges = 0
 	for pi, proc in enumerate(world):
-		for cap in proc[CAPS]:
+		for key in proc[KEYS]:
 			edges += 1
-			dot.edge(name(pi), name(cap), color="black")
+			dot.edge(name(pi), name(key), color="black")
 
 	print(edges)
 	#if edges > 3:# and len(edges) > len(world)-2:
