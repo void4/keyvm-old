@@ -12,6 +12,7 @@ Welcome to KeyVM's documentation!
    usage/quickstart
    usage/API
 
+   standard/architecture
    standard/datastructures
    standard/bytecode
 
