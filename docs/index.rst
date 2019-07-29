@@ -10,6 +10,7 @@ Welcome to KeyVM's documentation!
 
    usage/installation
    usage/quickstart
+   usage/assembler
    usage/API
 
    standard/architecture
