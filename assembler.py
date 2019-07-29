@@ -79,6 +79,7 @@ def assemble(code):
 
 asmt = AsmTransformer()
 def asm(text):
+    """Assemble ast-assembly code into vm binary"""
     parsed = asml.parse(text)
     #print(parsed)
     transformed = asmt.transform(parsed)
