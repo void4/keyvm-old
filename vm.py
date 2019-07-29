@@ -218,6 +218,7 @@ def run(code, gas, mem):
 				world[this[KEYS][targetkeyindex]][KEYS].append(this[KEYS][transferkeyindex])
 
 		elif I == I_RECURSE:
+			"""Recurse into process pointed to by <keyindex>, with <gas> and <mem> limits"""
 			keyindex, gas, mem = pop(3)
 
 			if has_key(keyindex):
@@ -236,15 +237,16 @@ def run(code, gas, mem):
 				chain.append(target)
 
 		elif I == I_MEMSIZE:
-			target_index = pop1()
+			"""Push the number of memories onto the stack"""
 			try:
-				this[DATA][target_index] = len(this[DATA])#must be serialized!
+				push(len(this[DATA]))#must be serialized!
 			except IndexError:
 				jump_back(S_OOA)
 				#print("memsize")
 				continue
 
 		elif I == I_MEMWRITE:
+			"""Write <data> to the <memory> at <address>"""
 			memory, address, data = pop(3)
 			try:
 				this[DATA][memory][address] = data
@@ -254,50 +256,62 @@ def run(code, gas, mem):
 				continue
 
 		elif I == I_MEMCREATE:
+			"""Create a new empty memory"""
 			this[DATA].append([])
 
 		elif I == I_ADD:
+			"""Compute <arg1> + <arg2> and push the result on the stack"""
 			arg1, arg2 = pop(2)
 			push((arg1 + arg2) % WORDSIZE)
 
 		elif I == I_SUB:
+			"""Compute <arg1> - <arg2> and push the result on the stack"""
 			arg1, arg2 = pop(2)
 			push((arg1 - arg2) % WORDSIZE)
 
 		elif I == I_MUL:
+			"""Compute <arg1> * <arg2> and push the result on the stack"""
 			arg1, arg2 = pop(2)
 			push((arg1 * arg2) % WORDSIZE)
 
 		elif I == I_DIV:
+			"""Compute <arg1> / <arg2> and push the result on the stack"""
 			arg1, arg2 = pop(2)
 			push((arg1 // arg2) % WORDSIZE)
 
 		elif I == I_JUMP:
+			"""Set the instruction pointer to <target> (unconditional jump/goto)"""
 			target = pop1()
 			this[HEADER][H_IP] = target
 			JUMP = True
 
 		elif I == I_JUMPIF:
+			"""Set the instruction pointer to <target> if <condition> > 0 (conditional jump)"""
 			condition, target = pop(2)
 			if condition > 0:
 				this[HEADER][H_IP] = target
 				JUMP = True
 
 		elif I == I_CODEREAD:
+			"""Push the <code_index> word of the own flattened representation onto the stack"""
 			code_index = pop(1)
 			push(flat(this)[code_index])
 			#flatten(this[CODE])[code_index]
 
 		elif I == I_CODELEN:
+			"""Push the length of the own flattened representation onto the stack"""
 			push(len(flat(this)))#len(flatten(this[CODE]))
 
 		elif I == I_PUSH:
+			"""Pushes the immediate argument onto the stack"""
 			push(args[0])
 
 		elif I == I_DUP:
+			"""Duplicate the topmost element of the stack"""
 			push(peek())
 
 		elif I == I_MEMPUSH:
+			"""Depending on <memory>, read either from (0:HEADER, 1:CODE, 2: n-2 memory) at <address>"""
 			memory, address = pop(2)
 			try:
 
@@ -311,6 +325,7 @@ def run(code, gas, mem):
 				jump_back(S_OOB)
 				continue
 		elif I == I_FORK:
+			"""Duplicate this process and receive its key"""
 			#memory = pop1()
 			index = len(world)
 
@@ -326,19 +341,24 @@ def run(code, gas, mem):
 			this[STACK].append(len(this[KEYS])-1)
 
 		elif I == I_HALT:
+			"""Set the halt status on this process and jump back to parent."""
 			jump_back(S_HLT)
 			continue
 
 		elif I == I_RETURN:
+			"""Set the return status on this process and jump back to parentself.
+			Used to indicate that return values are available (TODO)"""
 			jump_back(S_RET)
 			continue
 
 		elif I == I_RANDOM:
+			"""(Temporary) random number generator: integer between <mi> and <ma> (exclusive)"""
 			mi, ma = pop(2)
 			from random import randint
 			push(randint(mi, ma))
 
 		elif I == I_NUMKEYS:
+			"""Push the number of owned keys on the stack"""
 			push(len(this[KEYS]))
 
 

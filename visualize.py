@@ -1,8 +1,11 @@
 from time import time
+import os
 
 from graphviz import Digraph
 
 from instructions import *
+
+os.system("mkdir -p graphs")
 
 def visualize(world, startcode):
 
