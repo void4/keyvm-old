@@ -1,10 +1,10 @@
-from asm2 import asm
+from assembler import asm
 from vm import run
 from visualize import visualize
 
 
 #codelen(0,0)
-assembler = """
+code = """
 memcreate
 alloc(0,2)
 memwrite(0,0,fork())
@@ -15,7 +15,7 @@ recurse(mempush(2,0), div(mempush(0,2), 3), div(mempush(0,3), 3))
 recurse(mempush(2,1), div(mempush(0,2), 2), div(mempush(0,3), 2))
 """
 
-binary = asm(assembler)
+binary = asm(code)
 #print(binary)
 #print("LEN", len(binary))
 
