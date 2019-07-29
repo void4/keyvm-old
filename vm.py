@@ -104,14 +104,6 @@ def run(code, gas, mem):
 	start = 0
 	chain = [start]
 
-	while True:
-		current = chain[-1]
-		rec = world[current][HEADER][H_REC]
-		if rec != current:
-			chain.append(rec)
-		else:
-			break
-
 	#print("CHAIN", chain)
 	#traverse H_REC here?
 	# TODO refuel jump
@@ -127,6 +119,17 @@ def run(code, gas, mem):
 			#print("END")
 			return world
 			#break
+
+		while True:
+			current = chain[-1]
+			rec = world[current][HEADER][H_REC]
+			if rec != current:
+				chain.append(rec)
+			else:
+				break
+
+		print(chain)
+
 		this = world[chain[-1]]
 
 		#if not validate(this):
@@ -154,6 +157,9 @@ def run(code, gas, mem):
 				chain = chain[:-1]
 			else:
 				chain = chain[:to+1]
+
+			if len(chain) > 0:
+				world[chain[-1]][HEADER][H_REC] = chain[-1]
 
 		def get_cap(index):
 			return caps[index]
