@@ -12,6 +12,7 @@ PUSH 0
 MEMREAD
 PUSH 1
 CODELEN
-MEMWRITE```
+MEMWRITE
+```
 
 It doesn't yet check if the inputs/outputs match up.
