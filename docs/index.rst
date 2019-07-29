@@ -4,12 +4,16 @@
 Welcome to KeyVM's documentation!
 =================================
 
-.. automodule:: keyvm.representations
-    :members:
-
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
+
+   usage/installation
+   usage/quickstart
+   usage/API
+
+   standard/datastructures
+   standard/bytecode
 
 
 
