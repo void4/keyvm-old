@@ -12,8 +12,6 @@ Capability-secure, resource aware virtual machine
 
 ## Documentation
 
+https://keyvm.readthedocs.io
+
 https://esolangs.org/wiki/KeyVM
-
-This is a variant of https://esolangs.org/wiki/RarVM
-
-More TBD
