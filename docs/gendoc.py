@@ -38,7 +38,7 @@ while len(node.orelse) > 0:
             first = node.body[0]
             if type(first) in [Comment, ast.Expr]:
                 if type(first.value) == ast.Str:
-                    desc = first.value.s.replace("\n", "").strip()
+                    desc = first.value.s.replace("\n", "").strip().replace("<", "`<").replace(">", ">`")
         print("| %s | %s |" % (iname, desc))#, dir(first))
 
     #print(node.orelse)
