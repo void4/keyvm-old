@@ -1,5 +1,7 @@
 # KeyVM
 
+[![Documentation Status](https://readthedocs.org/projects/keyvm/badge/?version=latest)](https://keyvm.readthedocs.io/en/latest/?badge=latest)
+
 Capability-secure, resource aware virtual machine
 
 ## Install
