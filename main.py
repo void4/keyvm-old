@@ -15,11 +15,10 @@ recurse(mempush(2,0), div(mempush(0,2), 3), div(mempush(0,3), 3))
 recurse(mempush(2,1), div(mempush(0,2), 2), div(mempush(0,3), 2))
 """
 
-binary = asm(code)
-#print(binary)
-#print("LEN", len(binary))
-
 if __name__ == "__main__":
+	binary = asm(code)
+	#print(binary)
+	#print("LEN", len(binary))
 	startcode = str(binary)
 	world = run(binary, 10000, 10000)
 	#print(code)
