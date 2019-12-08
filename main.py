@@ -1,9 +1,7 @@
 from assembler import asm
-from vm import run
+from vm import run_from_code
 from visualize import visualize
 
-
-#codelen(0,0)
 code = """
 memcreate
 alloc(0,2)
@@ -17,11 +15,8 @@ recurse(mempush(2,1), div(mempush(0,2), 2), div(mempush(0,3), 2))
 
 if __name__ == "__main__":
 	binary = asm(code)
-	#print(binary)
-	#print("LEN", len(binary))
 	startcode = str(binary)
-	world = run(binary, 10000, 10000)
-	#print(code)
-	#print(world)
-	#print(SNAMES[world[0][0][0]])
+
+	world = run_from_code(binary, 10000, 10000)
+
 	visualize(world, startcode)
