@@ -1,10 +1,23 @@
 from instructions import *
 from representations import validate
 
-def run(code, gas, mem):
+def blob_from_code(code, gas, mem):
+	return [[S_NORMAL,0,gas,mem,0], [0], code, [], [], []]
+
+"""
+def prepare(blob, current=0):
+
+	indexes = []
+	for
+"""
+
+def run_from_code(code, gas, mem):
+	return run(blob_from_code(code, gas, mem))
+
+def run(blob):
 	"""Create a new process with code and run it with gas and memory resource restrictions"""
 
-	process = [[S_NORMAL,0,gas,mem,0], [0], code, [], []]
+	process = blob#prepare(blob)
 
 	if not validate(process):
 		print("INTRO VALIDATE FAIL")
